@@ -920,7 +920,8 @@ mark.hit.strong { background: #FBE9B8; }
    ------------------------------------------------------------------------ */
 html[data-embed="1"] .masthead,
 html[data-embed="1"] .site-foot{display:none !important}
-html[data-embed="1"] body{background:transparent}
+html[data-embed="1"],
+html[data-embed="1"] body{background:transparent;height:auto;min-height:0}
 html[data-embed="1"] #view{padding-top:0}
 html[data-embed="1"] .wrap{padding-left:0;padding-right:0}
 @media (max-width:720px){
@@ -2671,17 +2672,30 @@ var VIEWS = {"essay": {"title": "Essay and SOP analyser", "html": "<div data-vie
 
 (function(){
   if (window.self === window.top) return;
+  /* Measure the CONTENT, never document.body.scrollHeight. Inside a frame the
+     body is at least as tall as the frame we were just resized to, so measuring
+     it feeds our own answer back in and the frame ratchets upward forever. The
+     view's own bottom edge does not do that. */
   var last = 0;
+  function contentHeight(){
+    var v = document.getElementById('view');
+    if (!v) return 0;
+    var r = v.getBoundingClientRect();
+    return Math.ceil(r.bottom + (window.scrollY || 0));
+  }
   function post(){
-    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-    if (Math.abs(h - last) < 24) return;
+    var h = contentHeight();
+    if (!h || Math.abs(h - last) < 24) return;
     last = h;
     try { parent.postMessage({ involveToolsHeight: h }, '*'); } catch (e) {}
   }
   window.addEventListener('load', post);
-  window.addEventListener('hashchange', function(){ setTimeout(post, 60); });
-  if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
-  setInterval(post, 800);
+  window.addEventListener('hashchange', function(){ last = 0; setTimeout(post, 80); });
+  if (window.ResizeObserver) {
+    var v = document.getElementById('view');
+    if (v) new ResizeObserver(post).observe(v);
+  }
+  setInterval(post, 700);
 })();
   window.addEventListener('hashchange',mount);
   mount();
