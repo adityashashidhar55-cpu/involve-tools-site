@@ -481,6 +481,15 @@ html[data-embed="1"] .wrap{padding-left:0;padding-right:0}
 <script>window.plausible=window.plausible||function(){(window.plausible.q=window.plausible.q||[]).push(arguments)};</script>
 </head>
 <body>
+<!-- Sets the flag the html[data-embed="1"] rules above key off. It has to run
+     here, before the masthead paints, or the visitor sees our header appear and
+     then vanish inside a page that already has one. The CSS shipped without
+     this script for a while, which meant every embedded tool rendered a second
+     Involve masthead and a second footer inside the host page's own - and the
+     megamenu links in that ghost footer navigated the FRAME, stranding people
+     on a bare github.io page inside the branded shell. If we cannot read
+     window.top at all we are cross-origin, which means we are framed. -->
+<script>try{ if (window.self !== window.top) document.documentElement.setAttribute('data-embed','1'); }catch(e){ document.documentElement.setAttribute('data-embed','1'); }</script>
 <!-- WCAG 2.4.1. Without this a keyboard user tabbed through five masthead
      controls on every one of the nine routes before reaching the tool. -->
 <a class="sr skip" href="#view">Skip to the tool</a>
