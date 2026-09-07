@@ -1,0 +1,351 @@
+<style>
+/* ============================================================
+   Involve Consulting — tools page
+   Scoped to .ic2 so nothing here can touch the rest of the site.
+   ============================================================ */
+body.page-id-6802 #eut-page-title,
+body.page-id-6802 #eut-page-title-content{display:none !important}
+body.page-id-6802 .eut-container{padding:0 !important;max-width:none !important}
+body.page-id-6802 .eut-container > div,
+body.page-id-6802 .post-6802 > div{max-width:none !important;width:100% !important}
+
+.ic2,.ic2 *{box-sizing:border-box;text-transform:none !important;font-family:Montserrat,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+.ic2{
+  --deep:#102528; --deep2:#163336; --panel:#1B3C40;
+  --ink:#F3F8F7; --ink2:#AFC7C6; --ink3:#7E9B99;
+  --gold:#EBB305; --gold2:#F6CE55;
+  --teal:#6FB3B0; --line:rgba(255,255,255,.10);
+  --cream:#FFF2D0; --card:#FFFDF7;
+  color:var(--ink);line-height:1.55;
+}
+.ic2 .in{max-width:1180px;margin:0 auto;padding:0 34px}
+@media(max-width:700px){.ic2 .in{padding:0 20px}}
+
+/* ---------- glass ---------- */
+.ic2 .glass{position:relative;background:rgba(255,255,255,.035);border-radius:18px;
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.ic2 .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.2px;
+  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,.06) 42%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.34));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+
+/* ---------- hero ---------- */
+.ic2 .hero{position:relative;overflow:hidden;
+  background:radial-gradient(120% 90% at 12% 0%,#1D4448 0%,var(--deep2) 45%,var(--deep) 100%)}
+.ic2 .hero::after{content:"";position:absolute;width:760px;height:760px;right:-220px;top:-320px;
+  background:radial-gradient(circle,rgba(235,179,5,.16),transparent 62%);pointer-events:none}
+.ic2 .hero .in{position:relative;z-index:1;padding-top:64px;padding-bottom:56px}
+.ic2 .brandrow{display:flex;align-items:center;gap:14px;margin-bottom:34px}
+.ic2 .brandrow img{height:46px;width:auto;display:block;background:#fff;padding:7px 11px;border-radius:10px}
+.ic2 .brandrow span{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase !important;color:var(--ink3)}
+.ic2 .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:.68rem;font-weight:700;
+  letter-spacing:.19em;text-transform:uppercase !important;color:var(--gold)}
+.ic2 .eyebrow::before{content:"";width:20px;height:2px;background:var(--gold)}
+.ic2 h1.hh{font-size:clamp(2.1rem,1.3rem+2.6vw,3.5rem) !important;line-height:1.03 !important;
+  font-weight:700 !important;letter-spacing:-.035em !important;margin:16px 0 0 !important;
+  color:var(--ink) !important;max-width:17ch}
+.ic2 h1.hh em{font-style:normal;color:var(--gold)}
+.ic2 .lede{margin:18px 0 0 !important;font-size:1.06rem;line-height:1.6;color:var(--ink2) !important;max-width:56ch}
+.ic2 .ctas{display:flex;gap:12px;margin-top:30px;flex-wrap:wrap}
+.ic2 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:50px;
+  padding:0 26px;border-radius:999px;font-weight:600;font-size:.94rem;text-decoration:none;
+  border:0;cursor:pointer;transition:transform .2s,background .2s,box-shadow .2s}
+.ic2 .btn-gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#3B2E00 !important;
+  box-shadow:0 8px 26px -12px rgba(235,179,5,.85)}
+.ic2 .btn-gold:hover{transform:translateY(-1px);box-shadow:0 12px 30px -12px rgba(235,179,5,.95)}
+.ic2 .btn-ghost{background:rgba(255,255,255,.05);color:var(--ink) !important;position:relative}
+.ic2 .btn-ghost:hover{background:rgba(255,255,255,.1)}
+.ic2 .stats{display:flex;flex-wrap:wrap;margin-top:40px;border-radius:16px;overflow:hidden}
+.ic2 .stats > div{flex:1;min-width:132px;padding:16px 20px;border-right:1px solid var(--line)}
+.ic2 .stats > div:last-child{border-right:0}
+.ic2 .stats b{display:block;font-size:1.55rem;font-weight:700;color:var(--gold) !important;line-height:1;letter-spacing:-.02em}
+.ic2 .stats span{display:block;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase !important;color:var(--ink3) !important;margin-top:8px}
+
+/* ---------- section head ---------- */
+.ic2 .band{background:var(--deep);padding:70px 0 10px}
+.ic2 .band.alt{background:linear-gradient(180deg,var(--deep) 0%,var(--deep2) 100%)}
+.ic2 h2.sh{font-size:clamp(1.5rem,1.1rem+1.4vw,2.15rem) !important;line-height:1.1 !important;
+  font-weight:700 !important;letter-spacing:-.03em !important;margin:14px 0 0 !important;color:var(--ink) !important;max-width:22ch}
+.ic2 .sub{margin:14px 0 0 !important;color:var(--ink2) !important;max-width:60ch;font-size:1rem}
+
+/* ---------- product rows ---------- */
+.ic2 .prod{display:grid;grid-template-columns:1fr 1fr;gap:52px;align-items:center;padding:52px 0;border-top:1px solid var(--line)}
+.ic2 .prod:first-of-type{border-top:0}
+.ic2 .prod.flip .copy{order:2}
+.ic2 .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;
+  border-radius:999px;background:rgba(235,179,5,.14);color:var(--gold);font-weight:700;font-size:.82rem;margin-bottom:14px}
+.ic2 .kick{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase !important;color:var(--ink3);margin-bottom:9px}
+.ic2 h3.ph{font-size:1.4rem !important;line-height:1.2 !important;font-weight:700 !important;
+  letter-spacing:-.025em !important;margin:0 0 10px !important;color:var(--ink) !important;max-width:20ch}
+.ic2 .pd{color:var(--ink2) !important;font-size:.97rem;margin:0 0 16px !important;max-width:46ch}
+.ic2 .tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:20px}
+.ic2 .tag{font-size:.7rem;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.06);color:var(--ink2)}
+.ic2 .open{display:inline-flex;align-items:center;gap:7px;background:none;border:0;cursor:pointer;
+  color:var(--gold) !important;font-weight:600;font-size:.9rem;padding:0}
+.ic2 .open:hover{text-decoration:underline}
+
+/* the preview card — a real slice of what the tool prints */
+.ic2 .prev{padding:22px;font-size:.86rem}
+.ic2 .prev .pt{font-size:.64rem;letter-spacing:.15em;text-transform:uppercase !important;color:var(--ink3);margin-bottom:14px}
+.ic2 .row{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.ic2 .row:last-child{border-bottom:0}
+.ic2 .row .k{color:var(--ink2)}
+.ic2 .row .v{color:var(--ink);font-weight:600;text-align:right}
+.ic2 .big{font-size:2.3rem;font-weight:700;color:var(--gold);letter-spacing:-.03em;line-height:1}
+.ic2 .cap{color:var(--ink3);font-size:.78rem;margin-top:5px}
+.ic2 .bar{height:7px;border-radius:999px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:7px}
+.ic2 .bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--teal),var(--gold))}
+.ic2 .pill{display:inline-block;font-size:.66rem;padding:3px 9px;border-radius:999px;font-weight:600}
+.ic2 .ok{background:rgba(111,179,176,.18);color:#9AD3D0}
+.ic2 .no{background:rgba(235,120,90,.16);color:#F0A48D}
+.ic2 .wn{background:rgba(235,179,5,.16);color:var(--gold2)}
+.ic2 .quote{font-size:.8rem;color:var(--ink2);border-left:2px solid var(--gold);padding-left:11px;margin-top:12px}
+
+/* ---------- grid of the rest ---------- */
+.ic2 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:13px;padding:6px 0 66px}
+.ic2 .gc{text-align:left;padding:19px;cursor:pointer;transition:transform .2s,background .2s}
+.ic2 .gc:hover{transform:translateY(-2px);background:rgba(255,255,255,.06)}
+.ic2 .gc .t{display:block;font-weight:700;color:var(--ink);margin-bottom:5px;font-size:.95rem}
+.ic2 .gc .d{display:block;color:var(--ink2);font-size:.83rem;line-height:1.45}
+
+/* ---------- app panel ---------- */
+.ic2 .app{background:var(--cream);padding:44px 0 60px}
+.ic2 .apphead{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.ic2 .apphead h2{font-size:1.35rem !important;margin:0 !important;color:#12292B !important;font-weight:700 !important;letter-spacing:-.025em !important}
+.ic2 .apphead a{font-size:.86rem;color:#2E4F53 !important;font-weight:600}
+.ic2 .frame{border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 30px 70px -40px rgba(16,37,40,.6),0 2px 8px rgba(16,37,40,.08)}
+.ic2 .frame iframe{width:100%;height:1600px;border:0;display:block}
+.ic2 .fine{margin:14px 0 0 !important;font-size:.82rem;color:#5A6E6D !important}
+
+/* ---------- proof ---------- */
+.ic2 .proof{background:var(--deep2);padding:52px 0}
+.ic2 .proof .pl{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase !important;color:var(--ink3);margin-bottom:16px}
+.ic2 .proof ul{display:flex;flex-wrap:wrap;gap:12px 34px;list-style:none;margin:0;padding:0}
+.ic2 .proof li{font-weight:600;font-size:1rem;color:var(--ink);letter-spacing:-.01em}
+
+/* ---------- motion ---------- */
+.ic2 .rise{opacity:0;transform:translateY(18px);filter:blur(7px);transition:opacity .7s ease-out,transform .7s ease-out,filter .7s ease-out}
+.ic2 .rise.on{opacity:1;transform:none;filter:none}
+@media(prefers-reduced-motion:reduce){.ic2 .rise{opacity:1;transform:none;filter:none;transition:none}}
+
+@media(max-width:880px){
+  .ic2 .prod{grid-template-columns:1fr;gap:26px;padding:38px 0}
+  .ic2 .prod.flip .copy{order:0}
+  .ic2 .frame iframe{height:1250px}
+  .ic2 .stats > div{min-width:50%;border-bottom:1px solid var(--line)}
+}
+</style>
+
+<div class="ic2">
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="in">
+    <div class="brandrow">
+      <img src="https://involve-consulting.com/wp-content/uploads/2025/06/logo.png" alt="Involve Consulting">
+      <span>Free tools</span>
+    </div>
+    <span class="eyebrow">1,295 programmes &middot; 805 institutions &middot; 50 countries</span>
+    <h1 class="hh">Know where you stand <em>before</em> you pay anyone.</h1>
+    <p class="lede">Thirteen tools built on programme data we read off each institution&rsquo;s own website. Every figure carries the link it came from. Where a school publishes nothing, we leave it blank rather than estimate it.</p>
+    <div class="ctas">
+      <button type="button" class="btn btn-gold" data-route="#/profile">Start with the profile report</button>
+      <button type="button" class="btn btn-ghost glass" data-route="#/waiver">Check a GMAT waiver</button>
+    </div>
+    <div class="stats glass">
+      <div><b>1,295</b><span>Programmes</span></div>
+      <div><b>805</b><span>Institutions</span></div>
+      <div><b>1,025</b><span>With no hard test</span></div>
+      <div><b>50</b><span>Countries</span></div>
+      <div><b>Free</b><span>No sign-up</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FLAGSHIP TOOLS ============ -->
+<section class="band">
+  <div class="in">
+    <span class="eyebrow">One place, every stage</span>
+    <h2 class="sh">Four tools that do the work a consultant would charge for.</h2>
+    <p class="sub">Each one runs in your browser. Nothing you type is uploaded unless you press a button that says it will be.</p>
+  </div>
+
+  <div class="in">
+
+    <!-- 1 profile -->
+    <div class="prod rise">
+      <div class="copy">
+        <span class="num">1</span>
+        <div class="kick">Profile report &middot; Evaluate</div>
+        <h3 class="ph">A written verdict on where you actually stand.</h3>
+        <p class="pd">Answer questions about your academics, tests, work, leadership and goals. Get a scored profile, the programmes whose published requirements you already meet, the ones that would reject you today, and what to fix first.</p>
+        <div class="tags"><span class="tag">Five fit bands</span><span class="tag">Pool competitiveness</span><span class="tag">Printable</span></div>
+        <button type="button" class="open" data-route="#/profile">Open this tool &rarr;</button>
+      </div>
+      <div class="prev glass">
+        <div class="pt">Profile report &middot; sample output</div>
+        <div class="big">76 <span style="font-size:1rem;color:var(--ink3);font-weight:500">&plusmn; 6</span></div>
+        <div class="cap">Profile strength, with the confidence band we can actually defend</div>
+        <div class="bar"><i style="width:76%"></i></div>
+        <div style="margin-top:16px">
+          <div class="row"><span class="k">Already meet the published bar</span><span class="v"><span class="pill ok">31</span></span></div>
+          <div class="row"><span class="k">Competitive</span><span class="v"><span class="pill wn">39</span></span></div>
+          <div class="row"><span class="k">Not eligible as things stand</span><span class="v"><span class="pill no">33</span></span></div>
+        </div>
+        <div class="quote">Your biggest single lever is not your GMAT. Adding two countries moves you from 62 eligible programmes to 140.</div>
+      </div>
+    </div>
+
+    <!-- 2 waiver -->
+    <div class="prod flip rise">
+      <div class="copy">
+        <span class="num">2</span>
+        <div class="kick">Waiver check &middot; Qualify</div>
+        <h3 class="ph">Which waivers you actually qualify for.</h3>
+        <p class="pd">194 programmes publish criteria for waiving the GMAT or GRE. We read all of them against your profile and show the ones whose stated conditions you meet &mdash; in the school&rsquo;s own words, with the page it was read from.</p>
+        <div class="tags"><span class="tag">194 waiver rules</span><span class="tag">Quoted verbatim</span><span class="tag">Source per row</span></div>
+        <button type="button" class="open" data-route="#/waiver">Open this tool &rarr;</button>
+      </div>
+      <div class="prev glass">
+        <div class="pt">Waiver check &middot; sample output</div>
+        <div class="row"><span class="k">No test used at all</span><span class="v">488</span></div>
+        <div class="row"><span class="k">Waivable on published conditions</span><span class="v">194</span></div>
+        <div class="row"><span class="k">A named substitute test</span><span class="v">174</span></div>
+        <div class="row"><span class="k">Optional</span><span class="v">169</span></div>
+        <div class="row"><span class="k">Required, no exemption published</span><span class="v">86</span></div>
+        <div class="quote">A waiver is a request that can be refused. &ldquo;Optional&rdquo; is not. We never show one as the other.</div>
+      </div>
+    </div>
+
+    <!-- 3 essay -->
+    <div class="prod rise">
+      <div class="copy">
+        <span class="num">3</span>
+        <div class="kick">Essay analyser &middot; Write</div>
+        <h3 class="ph">Grammar, clich&eacute;s, and how much of it is really about you.</h3>
+        <p class="pd">146 grammar rules covering writers from every language background, not just one. Plus machine-writing markers, and a nine-part score on the things admissions readers actually notice &mdash; specificity, ownership, evidence, and whether you answered the question.</p>
+        <div class="tags"><span class="tag">146 rules</span><span class="tag">Any first language</span><span class="tag">Nine-part score</span></div>
+        <button type="button" class="open" data-route="#/essay">Open this tool &rarr;</button>
+      </div>
+      <div class="prev glass">
+        <div class="pt">Essay analyser &middot; sample output</div>
+        <div class="row"><span class="k">Specificity</span><span class="v">100</span></div>
+        <div class="bar"><i style="width:100%"></i></div>
+        <div class="row" style="margin-top:10px"><span class="k">Evidence to claim</span><span class="v">100</span></div>
+        <div class="bar"><i style="width:100%"></i></div>
+        <div class="row" style="margin-top:10px"><span class="k">Causal depth</span><span class="v">24</span></div>
+        <div class="bar"><i style="width:24%"></i></div>
+        <div class="quote">&ldquo;Since three years I am working&rdquo; &rarr; &ldquo;I have been working for three years&rdquo;. Duration takes <em>for</em>, and the present perfect.</div>
+      </div>
+    </div>
+
+    <!-- 4 cost -->
+    <div class="prod flip rise">
+      <div class="copy">
+        <span class="num">4</span>
+        <div class="kick">True cost &middot; Decide</div>
+        <h3 class="ph">What it really costs, in rupees, against the loan.</h3>
+        <p class="pd">Tuition, living, the salary you give up while studying and the loan you would take &mdash; run to the month you are genuinely back to even. The amortisation is checked against the standard formula, and it refuses to answer rather than do arithmetic on zeros.</p>
+        <div class="tags"><span class="tag">Verified amortisation</span><span class="tag">Opportunity cost</span><span class="tag">Break-even chart</span></div>
+        <button type="button" class="open" data-route="#/cost">Open this tool &rarr;</button>
+      </div>
+      <div class="prev glass">
+        <div class="pt">True cost &middot; sample output</div>
+        <div class="big">3y 5m</div>
+        <div class="cap">From the day the course starts until you are back to even</div>
+        <div style="margin-top:16px">
+          <div class="row"><span class="k">Cash cost of the degree</span><span class="v">&#8377;60,04,000</span></div>
+          <div class="row"><span class="k">Borrowed</span><span class="v">&#8377;42,75,000</span></div>
+          <div class="row"><span class="k">Monthly instalment</span><span class="v">&#8377;75,185</span></div>
+        </div>
+        <div class="quote">Enter a 0% rate on borrowed money and it refuses. If family money is interest-free, it is not a loan.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ THE REST ============ -->
+<section class="band alt">
+  <div class="in">
+    <span class="eyebrow">And nine more</span>
+    <h2 class="sh">The rest of the application, covered.</h2>
+    <p class="sub">Every one of these is in the Free Tools menu at the top of the page.</p>
+    <div class="grid">
+      <button type="button" class="gc glass" data-route="#/fit"><span class="t">School fit and gap report</span><span class="d">Where you sit against what 1,295 programmes publish about who they admit.</span></button>
+      <button type="button" class="gc glass" data-route="#/country"><span class="t">Which country suits you?</span><span class="d">16 countries ranked on your budget, your course and the work rules afterwards.</span></button>
+      <button type="button" class="gc glass" data-route="#/interview"><span class="t">Interview practice room</span><span class="d">Eight real school formats, timed, recorded in your own browser.</span></button>
+      <button type="button" class="gc glass" data-route="#/brief"><span class="t">Recommender brief builder</span><span class="d">So your recommender writes specifics instead of adjectives.</span></button>
+      <button type="button" class="gc glass" data-route="#/visa"><span class="t">Visa and work rights</span><span class="d">How long each of 16 countries lets you stay, read off government pages.</span></button>
+      <button type="button" class="gc glass" data-route="#/visadocs"><span class="t">Visa document prep</span><span class="d">Which portal, in what order, and the money you have to show.</span></button>
+      <button type="button" class="gc glass" data-route="#/money"><span class="t">When your money has to be there</span><span class="d">The date the funds must land, not just the amount.</span></button>
+      <button type="button" class="gc glass" data-route="#/open"><span class="t">Still open today</span><span class="d">What you can still apply to right now, and an honest count of what we cannot date.</span></button>
+      <button type="button" class="gc glass" data-route="#/housing"><span class="t">Housing finder</span><span class="d">The rental sites people use, and the rules that catch international students out.</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<section class="app" id="ic-app-top">
+  <div class="in">
+    <div class="apphead">
+      <h2 id="ic-now">Profile evaluation report</h2>
+      <a href="https://adityashashidhar55-cpu.github.io/involve-tools-site/" target="_blank" rel="noopener">Open in a new tab &rarr;</a>
+    </div>
+    <div class="frame">
+      <iframe id="ic-app" src="https://adityashashidhar55-cpu.github.io/involve-tools-site/#/profile" title="Involve Consulting tools" allow="camera; microphone"></iframe>
+    </div>
+    <p class="fine">The interview practice room asks for camera and microphone permission. It records only in your browser, and nothing reaches us unless you choose to send a take for review.</p>
+  </div>
+</section>
+
+<!-- ============ PROOF ============ -->
+<section class="proof">
+  <div class="in">
+    <div class="pl">Our clients have been admitted to</div>
+    <ul><li>INSEAD</li><li>Berkeley Haas</li><li>Maastricht University</li><li>EU Business School</li></ul>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var SRC='https://adityashashidhar55-cpu.github.io/involve-tools-site/';
+  var f=document.getElementById('ic-app'), now=document.getElementById('ic-now');
+  function label(r){
+    var b=document.querySelector('[data-route="'+r+'"] .t, [data-route="'+r+'"] .ph');
+    if(b) return b.textContent.trim();
+    var p=document.querySelector('.prod [data-route="'+r+'"]');
+    if(p){var h=p.closest('.copy').querySelector('.ph'); if(h) return h.textContent.trim();}
+    return 'Involve tools';
+  }
+  function go(r){
+    f.src=SRC+r;
+    now.textContent=label(r);
+    document.getElementById('ic-app-top').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  document.querySelectorAll('[data-route]').forEach(function(b){
+    b.addEventListener('click',function(){ go(b.dataset.route); });
+  });
+  /* a Free Tools dropdown item lands here with the route in the hash */
+  function fromHash(){
+    var h=location.hash;
+    if(h && h.indexOf('#/')===0){ f.src=SRC+h; now.textContent=label(h);
+      setTimeout(function(){document.getElementById('ic-app-top').scrollIntoView({block:'start'});},250); }
+  }
+  window.addEventListener('hashchange',fromHash); fromHash();
+
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('on'); io.unobserve(e.target); } });
+    },{threshold:.12});
+    document.querySelectorAll('.ic2 .rise').forEach(function(el,i){
+      el.style.transitionDelay=(i%2?90:0)+'ms'; io.observe(el);
+    });
+  } else {
+    document.querySelectorAll('.ic2 .rise').forEach(function(el){el.classList.add('on');});
+  }
+})();
+</script>
