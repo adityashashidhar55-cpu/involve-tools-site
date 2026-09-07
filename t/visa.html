@@ -407,6 +407,30 @@ mark.hit.strong { background: #FBE9B8; }
  [data-view="visa"] .k-restriction, body:where(:has([data-view="visa"])) .k-restriction {background:#8a1f1f;color:#fff}
  [data-view="visa"] .k-watch_out, body:where(:has([data-view="visa"])) .k-watch_out {background:#8a5a10;color:#fff}
  [data-view="visa"] .k-no_difference, body:where(:has([data-view="visa"])) .k-no_difference {background:#4a4a4a;color:#fff}
+ [data-view="visa"] .qgrid, body:where(:has([data-view="visa"])) .qgrid {display:grid;grid-template-columns:1fr 1fr;gap:16px 20px}
+ [data-view="visa"] .qgrid label, body:where(:has([data-view="visa"])) .qgrid label {display:block;margin:0 0 6px;font-weight:600;font-size:.92rem}
+ [data-view="visa"] .qgrid select, body:where(:has([data-view="visa"])) .qgrid select {width:100%;max-width:100%}
+ [data-view="visa"] .qhint, body:where(:has([data-view="visa"])) .qhint {display:block;margin:5px 0 0;font-size:.78rem;color:var(--ink-faint);line-height:1.5}
+ @media(max-width:640px){[data-view="visa"] .qgrid, body:where(:has([data-view="visa"])) .qgrid {grid-template-columns:1fr}}
+ [data-view="visa"] .headline, body:where(:has([data-view="visa"])) .headline {margin:0;padding:26px 24px;border-radius:12px;border:1px solid var(--rule);
+   background:rgba(0,0,0,.02);text-align:center}
+ [data-view="visa"] .headline .big, body:where(:has([data-view="visa"])) .headline .big {display:block;font-size:clamp(2.2rem,1.4rem+3vw,3.6rem);font-weight:700;
+   line-height:1;letter-spacing:-.03em}
+ [data-view="visa"] .headline .cap, body:where(:has([data-view="visa"])) .headline .cap {display:block;margin-top:9px;font-size:.72rem;font-weight:700;letter-spacing:.14em;
+   text-transform:uppercase;color:var(--ink-faint)}
+ [data-view="visa"] .headline .via, body:where(:has([data-view="visa"])) .headline .via {display:block;margin-top:14px;font-size:.95rem}
+ [data-view="visa"] .headline .src, body:where(:has([data-view="visa"])) .headline .src {display:block;margin-top:9px;font-size:.78rem;color:var(--ink-faint)}
+ [data-view="visa"] .maybe, body:where(:has([data-view="visa"])) .maybe {border-color:#8a5a10}
+ [data-view="visa"] .nope, body:where(:has([data-view="visa"])) .nope {border-color:#8a1f1f}
+ [data-view="visa"] .altline, body:where(:has([data-view="visa"])) .altline {display:flex;justify-content:space-between;gap:14px;padding:9px 0;
+   border-top:1px solid var(--rule);font-size:.88rem}
+ [data-view="visa"] .altline b, body:where(:has([data-view="visa"])) .altline b {font-weight:700;white-space:nowrap}
+ [data-view="visa"] .locked, body:where(:has([data-view="visa"])) .locked {position:relative;border:1px dashed var(--rule);border-radius:12px;padding:22px 24px;
+   margin-top:18px}
+ [data-view="visa"] .locked h4, body:where(:has([data-view="visa"])) .locked h4 {margin:0 0 10px;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+   color:var(--ink-faint)}
+ [data-view="visa"] .locked ul, body:where(:has([data-view="visa"])) .locked ul {margin:0 0 4px;padding-left:20px;font-size:.9rem;line-height:1.8}
+ [data-view="visa"] .locked li::marker, body:where(:has([data-view="visa"])) .locked li::marker {color:var(--ink-faint)}
  [data-view="visa"] .natnone, body:where(:has([data-view="visa"])) .natnone {font-size:.9rem;color:var(--ink-faint);margin:0}
  @media(max-width:640px){[data-view="visa"] .v.wrapcell, body:where(:has([data-view="visa"])) .v.wrapcell {max-width:62%}}
 
@@ -2702,6 +2726,1341 @@ window.INVOLVE_NATIONALITY_RULES = [
   }
 ];
 
+/* Involve Consulting — POST-STUDY WORK / JOB-SEARCH ROUTES AS CONDITIONAL RECORDS.
+   ==================================================================================
+   Companion to data/countries.js. countries.js answers "what does this country
+   grant". This file answers the question countries.js cannot: "WHICH route do I
+   actually get, and how long is it, GIVEN my level of study, my institution, my
+   field and my nationality?"
+
+   WHAT IS IN HERE
+   ---------------
+     Routes:                        26
+     Countries covered:             16  (every code in countries.js)
+     source_type 'official':        26  (every source_url is on a government
+                                        domain and was FETCHED on 2026-09-07)
+     source_type 'third_party_consistent': 0
+     Claims investigated and DROPPED: 11 (each one, with its reason, is listed in
+                                        data/ROUTES-SOURCING.md)
+     checked_on for every record:   2026-09-07
+
+   Routes with duration_months = null (the authority publishes no number of
+   months, or publishes only a cap): 6 — ca-pgwp-degree, ca-pgwp-nondegree,
+   nz-pswv-degree, nz-pswv-nondegree, ae-jobseeker-visit, sg-ltvp-graduate.
+   Render those as "not published as a fixed figure", NEVER as a number.
+
+   HOW A RENDERER MUST EVALUATE `requires`
+   ---------------------------------------
+   `requires` is a conjunction over the keys that are PRESENT.
+
+     * EVERY key present in `requires` must be satisfied for the route to apply.
+     * A key that is ABSENT IS NOT A CONDITION. Absent does not mean false and it
+       does not mean "unknown" — it means the authority does not gate this route
+       on that fact. Do not invent a condition from an absent key.
+     * `institution_on_list` carries the NAME of a published list, not the list
+       itself. There is exactly one global in this file, so the list contents are
+       not here. The tool must ask the user a yes/no question about it; the list
+       is named and linked in that route's `notes`.
+     * `nationality_in` is an allow-list of ISO codes. If it is present and the
+       user's nationality is not in it, the route does not apply to them.
+     * Where two routes for one country differ only in `requires`, they are
+       genuinely alternative doors — evaluate all of them and show every one that
+       matches, because the better door is often not the obvious one.
+
+   FIELD NOTES
+   -----------
+     duration_months      Months granted ON FIRST ISSUE. null = the authority
+                          publishes no fixed figure; say so, never guess.
+     renewable_to_months  TOTAL months if the route can be renewed, else null.
+                          null means "cannot be renewed", which is different from
+                          "renewal not published" — where renewal exists but is
+                          discretionary, that is stated in `notes`.
+     yields.by_level      Months by level of study, where the authority publishes
+                          a level split. Omitted where the figure is flat. A null
+                          inside means that level is not eligible or no separate
+                          figure is published.
+     kind                 What you may actually DO on the permission:
+                            'open_work'  — you may work outright, no switch first
+                            'job_search' — the permission is to LOOK; the work
+                                           right is absent, capped or unpublished
+                            'no_work'    — the authority states plainly that you
+                                           may not work
+     leads_to_pr          null = the page checked does not say. Not "no".
+
+   WHAT I COULD NOT CONFIRM (and therefore did not write)
+   ------------------------------------------------------
+     1. SWITZERLAND — what work the six-month search period actually permits. SEM
+        grants the six months in terms; it does not publish the work right. This
+        route is classed 'job_search' on the strength of SEM's own words ("in
+        which to look for a job"), not on a published work permission.
+     2. SWEDEN — the HOLDER's own right to work. Migrationsverket states only
+        that adult family members may work. Classed 'job_search' for that reason.
+     3. IRELAND — the day-to-day working conditions of Stamp 1G. The ISD HTML page
+        states the purpose and the durations and defers the conditions to a policy
+        PDF that was not read in this pass.
+     4. SINGAPORE — how long the LTVP for a graduate seeking employment is granted
+        for. The ICA page publishes documents, fees and a six-week processing time
+        and no duration at all. duration_months stays null.
+     5. FRANCE, India route — the euro value of the 1.5 x SMIC salary floor in
+        2026. interieur.gouv.fr states the multiple and no figure. salary_floor
+        carries amount: null rather than the general route's number.
+     6. FRANCE, India route — whether the second 12 months is automatic or
+        discretionary. Neither the accord nor interieur.gouv.fr states the test.
+     7. CANADA — a months figure for a bachelor's or doctoral PGWP. IRCC ties the
+        length to the programme length, not the level, and publishes no table.
+     8. NEW ZEALAND — any level-by-level table. INZ publishes "up to 3 years,
+        depending on the level of your qualification and how long you spent
+        studying for it" and nothing finer.
+     9. ITALY — a NATIONAL page for the graduate attesa occupazione permit. The
+        12-month figure below comes from a Ministry of the Interior PREFECTURE
+        page. It is a government domain, so source_type is 'official', but it is
+        not the national reference page. Treat it accordingly.
+    10. UK Graduate route — whether time on it counts toward settlement. GOV.UK is
+        silent on the Graduate visa page. leads_to_pr is null there. (For the HPI
+        visa GOV.UK is NOT silent, and says it does not count — see uk-hpi.)
+
+   SOURCING RULE APPLIED: source_type 'official' requires a government domain.
+   Every URL below was fetched on 2026-09-07 and every route carries a quoted
+   sentence from the page it was built from, in `quote`. Nothing here is written
+   from memory. Where a page did not say a thing, the thing is not here.
+
+   Findings on France, Germany, the Netherlands, the USA and Ireland are carried
+   in from /root/work/visa-duration-audit.md (2026-09-07), which quotes the same
+   government pages verbatim; those quotes are reproduced below rather than
+   re-litigated. See also data/ROUTES-SOURCING.md.
+*/
+
+window.INVOLVE_ROUTES = [
+
+  /* ================================ UNITED KINGDOM ============================ */
+  {
+    id: 'uk-graduate',
+    country: 'UK',
+    label: 'Graduate visa (the Graduate route)',
+    kind: 'open_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true,
+      apply_from_inside: true
+    },
+    yields: {
+      by_level: { bachelors: 24, masters: 24, phd: 36 }
+    },
+    switch_route: 'Skilled Worker visa. That does need a Home Office approved sponsor ' +
+      'and a certificate of sponsorship; the Graduate visa does not.',
+    salary_floor: {
+      amount: 41700, currency: 'GBP', period: 'year', year: 2026,
+      note: 'This is the Skilled Worker floor you must clear to SWITCH, not a condition ' +
+        'of the Graduate visa itself. You must be paid the higher of GBP 41,700 a year ' +
+        'or the published going rate for your occupation code, so the going rate is ' +
+        'often the real number.'
+    },
+    leads_to_pr: null,
+    notes: 'Two years today, 18 months for applications made on or after 1 January 2027, ' +
+      'three years at doctoral level on either side of that date. What fixes your length ' +
+      'is the date you APPLY, not the date you finished. The condition that actually ' +
+      'loses people this route is location: you must be physically in the UK and your ' +
+      'Student visa must still be valid on the day you apply, so going home for the ' +
+      'summer between finishing and applying can end it. You do not have to wait for the ' +
+      'ceremony — you can apply as soon as your provider tells the Home Office you have ' +
+      'passed. This route cannot be extended.',
+    quote: 'A Graduate visa lasts for: 2 years if you apply on or before 31 December 2026; ' +
+      '18 months if you apply on or after 1 January 2027. If you have a PhD or other ' +
+      'doctoral qualification, it will last for 3 years.',
+    source: 'GOV.UK, Graduate visa (Home Office / UK Visas and Immigration)',
+    source_url: 'https://www.gov.uk/graduate-visa',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'uk-hpi',
+    country: 'UK',
+    label: 'High Potential Individual (HPI) visa',
+    kind: 'open_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      institution_on_list: 'uk_hpi_global_universities_list',
+      max_years_since_graduation: 5
+    },
+    yields: {
+      by_level: { bachelors: 24, masters: 24, phd: 36 }
+    },
+    switch_route: 'Skilled Worker visa, or another work route, applied for before the HPI ' +
+      'visa expires. The HPI visa itself cannot be extended.',
+    salary_floor: null,
+    leads_to_pr: false,
+    notes: 'THIS IS THE "TOP UNIVERSITY" ROUTE, AND IT IS THE MIRROR IMAGE OF THE GRADUATE ' +
+      'ROUTE: your degree must come from a NON-UK university on the Home Office published ' +
+      'list, and GOV.UK says plainly "UK universities are not eligible". The list you are ' +
+      'checked against is the one in force for the month and year your qualification was ' +
+      'AWARDED, not the one in force when you apply. The current list, covering awards made ' +
+      'between 1 November 2025 and 31 October 2026, is at ' +
+      'https://www.gov.uk/government/publications/high-potential-individual-visa-global-universities-list/high-potential-individual-visa-global-universities-list-2025 ' +
+      'and it names 80 universities. NOT ONE OF THEM IS IN INDIA — the list runs to the ' +
+      'United States, China, Hong Kong, Australia, Canada, Japan, Singapore, South Korea ' +
+      'and western Europe only. For an Indian candidate this route is therefore reachable ' +
+      'only by way of a degree taken at a listed institution abroad, which is exactly the ' +
+      'planning question worth asking BEFORE choosing a school. Other hard edges: there is ' +
+      'a yearly cap on applications (the application year runs 1 November to 31 October) ' +
+      'and you are told at the point of applying if it has been hit; you must have an ' +
+      'Ecctis assessment of your qualification, and Ecctis will NOT tell you whether your ' +
+      'university is eligible; you can only ever apply once; and you cannot apply at all if ' +
+      'you have already held a Graduate visa. GOV.UK also states that time on this visa ' +
+      'does not count toward settlement, which is why leads_to_pr is false here and null on ' +
+      'the Graduate route.',
+    quote: 'An HPI visa lasts for 2 years. If you have a PhD or other doctoral ' +
+      'qualification, it will last for 3 years. ... UK universities are not eligible. ... ' +
+      'You must have been awarded your qualification in the last 5 years. ... Your time on ' +
+      'an HPI visa will not count as time spent in the UK if you apply to settle in the UK.',
+    source: 'GOV.UK, High Potential Individual (HPI) visa: Overview and Eligibility ' +
+      '(Home Office / UK Visas and Immigration); global universities list 2025',
+    source_url: 'https://www.gov.uk/high-potential-individual-visa/eligibility',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ==================================== GERMANY =============================== */
+  {
+    id: 'de-sec20-jobseeker',
+    country: 'DE',
+    label: 'Job-seeking residence permit, Section 20(1) no. 1 AufenthG',
+    kind: 'open_work',
+    duration_months: 18,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true
+    },
+    switch_route: 'EU Blue Card (Section 18g AufenthG) or the qualified-professional work ' +
+      'permit (Sections 18a / 18b AufenthG).',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'Eighteen months, and the statute closes the door on any extension beyond that ' +
+      'in terms: "Die Verlaengerung nach Absatz 1 ueber diese Zeitraeume hinaus ist ' +
+      'ausgeschlossen." No level split — bachelor, master and doctorate all get up to 18 ' +
+      'months under no. 1. THE BELIEF THAT GERMANY GIVES TWO YEARS IS WRONG and comes from ' +
+      'confusing this permit with the Opportunity Card (see de-chancenkarte): the ' +
+      'Opportunity Card gives 12 months of search plus up to 24 further months that are only ' +
+      'available once you ALREADY hold a contract or binding offer. You must also prove you ' +
+      'can support yourself (Lebensunterhaltssicherung, Section 20(2)). The clock starts at ' +
+      'final results, not the ceremony, so book the Foreigners Authority appointment early — ' +
+      'backlogs are the routine failure mode.',
+    quote: 'Zur Suche nach einer Erwerbstaetigkeit ... wird einem Auslaender nach ' +
+      'erfolgreichem Abschluss eines Studiums im Bundesgebiet im Rahmen eines Aufenthalts ' +
+      'nach Paragraf 16b oder Paragraf 16c eine Aufenthaltserlaubnis erteilt. ... Sie wird ' +
+      'in den Faellen des Absatzes 1 Nummer 1 bis 4 fuer einen Zeitraum von bis zu 18 ' +
+      'Monaten erteilt. ... Die Verlaengerung nach Absatz 1 ueber diese Zeitraeume hinaus ' +
+      'ist ausgeschlossen.',
+    source: 'Bundesministerium der Justiz / Bundesamt fuer Justiz, Aufenthaltsgesetz ' +
+      'Paragraf 20 "Arbeitsplatzsuche im Anschluss an Aufenthalte im Bundesgebiet"',
+    source_url: 'https://www.gesetze-im-internet.de/aufenthg_2004/__20.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'de-chancenkarte',
+    country: 'DE',
+    label: 'Chancenkarte / Opportunity Card, search stage (Such-Chancenkarte), Section 20a AufenthG',
+    kind: 'job_search',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors'
+    },
+    switch_route: 'Sections 18a / 18b / 18g AufenthG once you are hired. The ' +
+      'Folge-Chancenkarte (up to 24 further months) is NOT job-search time: Section 20a(5) ' +
+      'grants it only where you already hold an employment contract or a binding job offer ' +
+      'AND the Federal Employment Agency has consented.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'THIS ROUTE IS WORSE THAN SECTION 20 FOR ANYONE WHO STUDIED IN GERMANY, and it is ' +
+      'listed here only because it is the source of the widely repeated "Germany gives two ' +
+      'years" claim. The search stage is 12 months, not 18, and your work rights on it are ' +
+      'capped: Section 20a(2) allows "eine Beschaeftigung von durchschnittlich insgesamt ' +
+      'hoechstens 20 Stunden je Woche" plus trial employment of at most two weeks at a time. ' +
+      'Its point is that it does NOT require a German degree — it is the door for someone ' +
+      'whose qualification is foreign. If you hold a German degree, use de-sec20-jobseeker ' +
+      'instead. The federal portal says so directly: the Section 20 permit "gives you more ' +
+      'time to look for a job (18 months instead of one year) and you can work part-time ' +
+      'without restrictions during this time".',
+    quote: 'Die Chancenkarte wird zunaechst fuer einen Zeitraum von bis zu einem Jahr ' +
+      'erteilt (Such-Chancenkarte). Die Chancenkarte kann auf Grund eines waehrend eines ' +
+      'Aufenthaltes nach Satz 1 gestellten Antrags um bis zu zwei Jahre als solche ' +
+      'verlaengert werden, wenn der Auslaender einen Arbeitsvertrag oder ein verbindliches ' +
+      'Arbeitsplatzangebot fuer eine inlaendische qualifizierte Beschaeftigung hat und die ' +
+      'Bundesagentur fuer Arbeit zugestimmt hat (Folge-Chancenkarte).',
+    source: 'Bundesministerium der Justiz / Bundesamt fuer Justiz, Aufenthaltsgesetz ' +
+      'Paragraf 20a "Chancenkarte"',
+    source_url: 'https://www.gesetze-im-internet.de/aufenthg_2004/__20a.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ================================= UNITED STATES ============================ */
+  {
+    id: 'us-opt-post-completion',
+    country: 'US',
+    label: 'Post-completion Optional Practical Training (OPT)',
+    kind: 'open_work',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true,
+      apply_from_inside: true
+    },
+    switch_route: 'H-1B specialty occupation, filed by an employer. The gate is not a ' +
+      'salary floor, it is the annual cap and a selection process — 65,000 regular places ' +
+      'plus 20,000 reserved for holders of a US master’s degree or higher.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'Twelve months at EVERY degree level — there is no level split in the US system, ' +
+      'and any pre-completion OPT you already used is deducted from this allowance. The ' +
+      'split in the US is by FIELD, not level (see us-stem-opt-extension). This is work ' +
+      'authorisation attached to your F-1 status, not a visa and not a stay-back permit: ' +
+      'all OPT must be directly related to your major area of study, you must work at least ' +
+      '20 hours a week, and you cannot start until USCIS approves Form I-765 and the ' +
+      'Employment Authorization Document is in your hand. The unemployment cap is what ' +
+      'actually ends people’s status: 90 days of unemployment on initial OPT. Filing ' +
+      'window: your DSO must first enter the recommendation in SEVIS, then you file within ' +
+      '30 days, no earlier than 90 days before you complete the degree and no later than 60 ' +
+      'days after. Miss the 60 days and post-completion OPT is gone for good.',
+    quote: 'Eligible students can apply to receive up to 12 months of OPT employment ' +
+      'authorization before completing their academic studies (pre-completion) and/or after ' +
+      'completing their academic studies (post-completion). However, all periods of ' +
+      'pre-completion OPT will be deducted from the available period of post-completion OPT.',
+    source: 'U.S. Citizenship and Immigration Services (USCIS), Optional Practical Training ' +
+      '(OPT) for F-1 Students',
+    source_url: 'https://www.uscis.gov/working-in-the-united-states/students-and-exchange-visitors/optional-practical-training-opt-for-f-1-students',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'us-stem-opt-extension',
+    country: 'US',
+    label: 'STEM OPT extension (24-month extension of post-completion OPT)',
+    kind: 'open_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true,
+      stem_designated: true,
+      apply_from_inside: true
+    },
+    switch_route: 'H-1B specialty occupation. The extension buys you two more shots at the ' +
+      'cap, which is the whole reason it matters.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'Twenty-four months ON TOP of the 12 months of post-completion OPT, so 36 months ' +
+      'in total. It is NOT open to every master’s student, and the test is not the ' +
+      'reputation of the subject: it is the six-digit CIP code your PROGRAMME is registered ' +
+      'under on your own Form I-20, checked against the STEM Designated Degree Program List ' +
+      'at https://www.ice.gov/doclib/sevis/pdf/stemList2024.pdf (linked from ' +
+      'https://www.ice.gov/sevis/schools as the current STEM list, last updated 22 July ' +
+      '2024). A STANDARD MBA IS NOT ON IT. CIP 52.0201, Business Administration and ' +
+      'Management General — the ordinary MBA code — is absent, as are 52.0801 Finance and ' +
+      '52.1401 Marketing. The ENTIRE CIP-52 business family on the list is four codes: ' +
+      '52.1301 Management Science, 52.1302 Business Statistics, 52.1304 Actuarial Science ' +
+      'and 52.1399 Management Sciences and Quantitative Methods Other. The business-adjacent ' +
+      'codes that do qualify sit in CIP-30 instead — 30.7102 Business Analytics, 30.7104 ' +
+      'Financial Analytics, 30.7001 Data Science, 30.7101 Data Analytics — plus 27.0305 ' +
+      'Financial Mathematics, 45.0603 Econometrics and 14.3701 Operations Research. A ' +
+      '"STEM-designated MBA" is simply a programme the school has re-registered under one of ' +
+      'those codes. CHECK THE CIP CODE PRINTED ON YOUR I-20, NOT THE SCHOOL’S MARKETING ' +
+      'PAGE. Second gate, equally fatal: your employer must be enrolled in and actively ' +
+      'using E-Verify, and many smaller employers are not. You also need a signed Form I-983 ' +
+      'training plan, a DSO endorsement within the last 60 days, reporting to your DSO every ' +
+      'six months, and you get only 60 further days of unemployment (150 across both ' +
+      'periods). Staffing and consulting arrangements that supply labour for hire often ' +
+      'cannot demonstrate the bona fide employer-employee relationship this route requires.',
+    quote: 'Certain F-1 students who receive science, technology, engineering, and ' +
+      'mathematics (STEM) degrees may apply for a 24-month extension of their ' +
+      'post-completion optional practical training (OPT). ... Are employed by an employer ' +
+      'who is enrolled in and is using E-Verify.',
+    source: 'U.S. Citizenship and Immigration Services (USCIS), Optional Practical Training ' +
+      'Extension for STEM Students (STEM OPT); ICE / SEVP STEM Designated Degree Program List',
+    source_url: 'https://www.uscis.gov/working-in-the-united-states/students-and-exchange-visitors/optional-practical-training-extension-for-stem-students-stem-opt',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ===================================== CANADA =============================== */
+  {
+    id: 'ca-pgwp-degree',
+    country: 'CA',
+    label: 'Post-Graduation Work Permit (PGWP) — bachelor’s, master’s or doctoral degree',
+    kind: 'open_work',
+    duration_months: null,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_on_list: 'ca_pgwp_eligible_dli',
+      min_programme_months: 8
+    },
+    yields: {
+      by_level: { bachelors: null, masters: 36, phd: null }
+    },
+    switch_route: 'Permanent residence through Express Entry, most commonly the Canadian ' +
+      'Experience Class, or a Provincial Nominee Program.',
+    salary_floor: null,
+    leads_to_pr: true,
+    notes: 'THERE IS NO SINGLE PGWP LENGTH, which is why duration_months is null here. IRCC ' +
+      'ties the length to the programme, not the level: a programme of at least 8 months but ' +
+      'under 2 years gets a permit up to the length of the programme; 2 years or longer gets ' +
+      '3 years. The one level rule is the master’s exception — since 15 February 2024 a ' +
+      'master’s degree of at least 8 months gets a 3-year permit even if the programme ' +
+      'was shorter than 2 years, and that is the only figure recorded above. The permit is ' +
+      'also capped by your passport expiry, so renew the passport BEFORE you apply. THE GOOD ' +
+      'NEWS FOR DEGREE HOLDERS: "There are no field of study requirements for graduates with ' +
+      'a bachelor’s degree, master’s degree or doctoral degree" — the field-of-study ' +
+      'rule that catches everyone else does not touch you (see ca-pgwp-nondegree). You do ' +
+      'still need CLB/NCLC 7 in all four skills. Graduating from a designated learning ' +
+      'institution is NOT enough on its own: the institution must be PGWP-eligible, and ' +
+      'programmes delivered by a private college on behalf of a public one (public-private ' +
+      'partnerships) that you started after 15 May 2024 are not eligible at all. Apply ' +
+      'within 180 days of confirmation that you completed, with a study permit that was ' +
+      'valid at some point in those 180 days. One PGWP per lifetime.',
+    quote: 'You can apply for a 3-year PGWP, even if your master’s program was less than ' +
+      '2 years, as long as your program was at least 8 months (or 900 hours for Quebec ' +
+      'programs) and you meet all other eligibility requirements. ... There are no field of ' +
+      'study requirements for graduates with a bachelor’s degree, master’s degree ' +
+      'or doctoral degree.',
+    source: 'Immigration, Refugees and Citizenship Canada (IRCC), Post-graduation work ' +
+      'permit: Who can apply (modified 24 June 2026) and About the PGWP (modified 9 March 2026)',
+    source_url: 'https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/work/after-graduation/eligibility.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'ca-pgwp-nondegree',
+    country: 'CA',
+    label: 'Post-Graduation Work Permit (PGWP) — college, polytechnic, or any other ' +
+      'non-degree university programme',
+    kind: 'open_work',
+    duration_months: null,
+    renewable_to_months: null,
+    requires: {
+      degree_from_destination: true,
+      institution_on_list: 'ca_pgwp_eligible_dli',
+      min_programme_months: 8,
+      field_linked_to_shortage: true
+    },
+    switch_route: 'Permanent residence through Express Entry or a Provincial Nominee ' +
+      'Program, but the Canadian Experience Class needs work at NOC TEER 0 to 3, which a ' +
+      'non-degree programme does not guarantee.',
+    salary_floor: null,
+    leads_to_pr: true,
+    notes: 'THIS IS THE FIELD-OF-STUDY TRAP, and it is the single most common way an Indian ' +
+      'applicant loses the PGWP. If you filed your STUDY PERMIT application on or after ' +
+      '1 November 2024 and you are NOT graduating with a bachelor’s, master’s or ' +
+      'doctoral degree, your programme must be in an eligible field of study linked to ' +
+      'occupations in long-term shortage. That catches the college, polytechnic and ' +
+      'non-degree university programmes a great many applicants enrol in. The list of ' +
+      'eligible fields is published by IRCC at ' +
+      'https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/work/after-graduation/eligibility/field-of-study.html ' +
+      'and it changes — check it against your programme BEFORE you enrol, not after you ' +
+      'graduate. The date that decides whether the rule applies to you is the date you filed ' +
+      'the STUDY PERMIT application, not the date you apply for the PGWP. Language: CLB/NCLC ' +
+      '5 in all four skills for college, polytechnic and non-university programmes; CLB/NCLC ' +
+      '7 for "any other university program". Length follows the programme, so ' +
+      'duration_months is null. Flight school graduates are exempt from both the language ' +
+      'and the field-of-study requirement.',
+    quote: 'If you submitted your study permit application on or after November 1, 2024, you ' +
+      'must have graduated in an eligible field of study. ... If your study program has a ' +
+      'field of study requirement, you must graduate from a program linked to certain ' +
+      'occupations in long-term shortage.',
+    source: 'Immigration, Refugees and Citizenship Canada (IRCC), Post-graduation work ' +
+      'permit: Who can apply (modified 24 June 2026)',
+    source_url: 'https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/work/after-graduation/eligibility.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ===================================== FRANCE =============================== */
+  {
+    id: 'fr-rece',
+    country: 'FR',
+    label: 'Carte de sejour / VLS-TS mention "recherche d’emploi ou creation ' +
+      'd’entreprise" (RECE)',
+    kind: 'open_work',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'masters',
+      degree_from_destination: true,
+      institution_recognised: true
+    },
+    switch_route: 'Carte de sejour temporaire "salarie" or "travailleur temporaire" at ' +
+      'EUR 2,800.53 gross a month or more, with the labour-market test disapplied. Higher ' +
+      'salaries unlock the multi-year talent cards.',
+    salary_floor: {
+      amount: 2800.53, currency: 'EUR', period: 'month', year: 2026,
+      note: 'This is not only the switch threshold — it is a condition of any job you take ' +
+        'WHILE HOLDING the RECE card. The job must also be connected to your studies. Below ' +
+        'the floor, or outside your field, you may not lawfully take the post.'
+    },
+    leads_to_pr: null,
+    notes: 'One year, and Service-Public states in terms that it cannot be renewed. THE ' +
+      'LEVEL RULE IS STRICT AND IS THE USUAL REASON AN APPLICATION FAILS: a general French ' +
+      'bachelor’s (licence) does not qualify. You need a licence professionnelle, a ' +
+      'Mastere Specialise, a Master of Science labelled by the Conference des Grandes ' +
+      'Ecoles, or another diploma at least equivalent to the master grade. If you are in ' +
+      'France you must also have obtained the diploma in the last 12 months and file at the ' +
+      'prefecture in the two months BEFORE your student card expires; if you have already ' +
+      'left, you may apply at a consulate for up to 4 years from the date of the diploma. ' +
+      'This card does not apply to Algerian students, who are covered by a separate ' +
+      'bilateral agreement. AND KILL THE FIVE-YEAR MYTH BEFORE IT COSTS SOMEONE THEIR ' +
+      'STATUS: the "5-year visa" circulating in the market is a multiple-entry SHORT-STAY ' +
+      'Schengen visa capped at 90 days in any 180, and Campus France India states it "does ' +
+      'not allow you to work in France or look for a job". It is a travel convenience for ' +
+      'alumni. It is not an extension of anything.',
+    quote: 'La carte de sejour ou le VLS-TS est valable 1 an. Le renouvellement n’est ' +
+      'pas possible. ... Avoir obtenu au cours des 12 derniers mois, une licence ' +
+      'professionnelle, un Mastere Specialise, un Master of Science (labellise par la ' +
+      'conference des grandes ecoles) ou un autre diplome au moins equivalent au master.',
+    source: 'Service-Public.fr (Direction de l’information legale et administrative, ' +
+      'Premier ministre), fiche F17319, verified 1 June 2026',
+    source_url: 'https://www.service-public.fr/particuliers/vosdroits/F17319',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'fr-aps-master-bilateral',
+    country: 'FR',
+    label: 'Autorisation provisoire de sejour dite "Master", under a bilateral migration ' +
+      'and mobility agreement',
+    kind: 'open_work',
+    duration_months: 12,
+    renewable_to_months: 24,
+    requires: {
+      level_min: 'masters',
+      nationality_in: ['IN', 'BJ', 'BF', 'MU', 'TN', 'GA']
+    },
+    switch_route: 'A work card at the end of the one or two years. The accord’s own ' +
+      'words are that you continue in France only if you are "deja pourvus d’un emploi ' +
+      'ou titulaires d’une promesse d’embauche" — you switch, you do not extend.',
+    salary_floor: {
+      amount: null, currency: 'EUR', period: 'month', year: 2026,
+      note: 'The Interior Ministry states the threshold as 1.5 times the monthly SMIC and ' +
+        'gives NO euro figure. The 2026 value of 1.5 x SMIC was not established from a ' +
+        'government page in this pass, so no number is published here. Do not assume it ' +
+        'equals the general RECE route’s EUR 2,800.53.'
+    },
+    leads_to_pr: null,
+    notes: 'THIS IS THE ROUTE THAT GIVES AN INDIAN MASTER’S GRADUATE TWO YEARS IN ' +
+      'FRANCE, AND IT IS THE ONE MOST ADVISERS MISS. Under the France-India Migration and ' +
+      'Mobility Partnership signed at New Delhi on 10 March 2018 (published by Decret ' +
+      'n. 2021-1321 of 11 October 2021, legifrance JORFTEXT000044193646, in force 1 October ' +
+      '2021) the permit is 12 months RENEWABLE ONCE, for a total of 24 — against 12 months ' +
+      'non-renewable on the general RECE card. The Interior Ministry lists the same "Master" ' +
+      'APS for Benin, Burkina Faso, Mauritius, Tunisia, Cape Verde, Republic of the Congo ' +
+      '(Brazzaville), Gabon and India, but the duration quoted here, "12 mois renouvelable ' +
+      'une fois", is the entry for INDIA; other partner countries appear under different ' +
+      'durations on the same page, so check the country before relying on 24 months. NOTE ' +
+      'ON THIS FILE’S nationality_in: Cape Verde and Congo-Brazzaville are named in the ' +
+      'accord list but have no entry in data/nationality.js, so their ISO codes are ' +
+      'deliberately omitted above rather than invented. Two further advantages over the ' +
+      'general route: India is one of the countries where the qualifying diploma may come ' +
+      'EITHER from a nationally accredited French institution OR from an institution in the ' +
+      'home country under an international joint-degree agreement, and Campus France India ' +
+      'states you may file at a VFS centre in India within 4 years of obtaining the ' +
+      'master’s. WHAT IS NOT KNOWN: neither the accord nor the Ministry states the test ' +
+      'a prefecture applies at renewal, so do not promise the second year as automatic. And ' +
+      'nothing anywhere extends a French job-search permit to five years.',
+    quote: '12 mois renouvelable une fois : Inde. ... Autorisation provisoire de sejour dite ' +
+      '"Master": Benin, Burkina Faso, Maurice, Tunisie, Cap Vert, Republique du Congo ' +
+      '(Brazzaville), Gabon et Inde. ... Diplome au moins equivalent au Master : Cap Vert, ' +
+      'Republique du Congo (Brazzaville), Inde.',
+    source: 'Ministere de l’Interieur, Direction generale des etrangers en France — ' +
+      'Accords bilateraux en matiere de mobilite professionnelle; corroborated by Legifrance, ' +
+      'Decret n. 2021-1321 du 11 octobre 2021 (JORFTEXT000044193646), Article 3.2',
+    source_url: 'https://www.immigration.interieur.gouv.fr/limmigration-en-france/accords-internationaux/accords-bilateraux-en-matiere-de-mobilite-professionnelle',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ===================================== IRELAND ============================== */
+  {
+    id: 'ie-tlgp-level8',
+    country: 'IE',
+    label: 'Third Level Graduate Programme (Stamp 1G) — NFQ Level 8 award',
+    kind: 'job_search',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true,
+      apply_from_inside: true
+    },
+    switch_route: 'Critical Skills Employment Permit or General Employment Permit, issued by ' +
+      'the Department of Enterprise, Tourism and Employment, or a research hosting agreement.',
+    salary_floor: {
+      amount: 40904, currency: 'EUR', period: 'year', year: 2026,
+      note: 'Critical Skills Employment Permit: EUR 40,904 a year, reduced to EUR 36,848 if ' +
+        'you received the qualification in the 12 months before you apply; EUR 68,911 for ' +
+        'occupations off the Critical Skills list. General Employment Permit: EUR 36,605, ' +
+        'reduced to EUR 34,009 with a relevant Irish degree awarded in the previous 12 months.'
+    },
+    leads_to_pr: null,
+    notes: 'A Level 8 award gets TWELVE MONTHS AND NO MORE — the renewal to 24 months exists ' +
+      'only at Level 9 and above (see ie-tlgp-level9plus), and an Irish honours ' +
+      'bachelor’s is Level 8. The award must come from a recognised Irish awarding body: ' +
+      'the Irish universities, RCSI, the Institutes of Technology, or QQI. Two hard caps ' +
+      'catch people. First, the six-month clock runs from the date you were NOTIFIED IN ' +
+      'WRITING of your result, not from the graduation ceremony. Second, your Stamp 2 ' +
+      'student years and your Stamp 1G years are counted together against a seven-year ' +
+      'aggregate limit, and there is no discretion once you hit it. You must hold a current ' +
+      'Stamp 2 permission and a valid registration card when you apply, and you cannot use ' +
+      'the programme more than twice. WHAT ISD DOES NOT PUBLISH on this page is what work ' +
+      'Stamp 1G actually permits — the page states the purpose only, and defers the ' +
+      'conditions to its policy document at ' +
+      'https://www.irishimmigration.ie/wp-content/uploads/2024/03/third-level-graduate-programme.pdf, ' +
+      'which was not read in this pass. That is why kind is job_search here and not open_work.',
+    quote: 'Graduates with an award at Level 8 on the National Framework of Qualifications ' +
+      'will be granted a twelve-month permission to a maximum of seven years’ student ' +
+      'permission overall (time spent on Stamp 2 as a student and on Stamp 1G under this ' +
+      'programme cannot exceed an aggregate time of seven years in total).',
+    source: 'Immigration Service Delivery (Department of Justice, Home Affairs and ' +
+      'Migration), Third level graduate programme, page last updated 28 March 2024',
+    source_url: 'https://www.irishimmigration.ie/my-situation-has-changed-since-i-arrived-in-ireland/third-level-graduate-programme/',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'ie-tlgp-level9plus',
+    country: 'IE',
+    label: 'Third Level Graduate Programme (Stamp 1G) — NFQ Level 9 award or above',
+    kind: 'job_search',
+    duration_months: 12,
+    renewable_to_months: 24,
+    requires: {
+      level_min: 'masters',
+      degree_from_destination: true,
+      institution_recognised: true,
+      apply_from_inside: true
+    },
+    yields: {
+      by_level: { bachelors: null, masters: 24, phd: 24 }
+    },
+    switch_route: 'Critical Skills Employment Permit or General Employment Permit, or a ' +
+      'research hosting agreement.',
+    salary_floor: {
+      amount: 40904, currency: 'EUR', period: 'year', year: 2026,
+      note: 'Critical Skills Employment Permit: EUR 40,904 a year, reduced to EUR 36,848 if ' +
+        'you received the qualification in the 12 months before you apply. The reduced ' +
+        'figure is the one a fresh master’s graduate should be quoting to employers.'
+    },
+    leads_to_pr: null,
+    notes: 'AN IRISH MASTER’S IS NFQ LEVEL 9, SO THE HONEST HEADLINE IS "12 MONTHS, ' +
+      'THEN 12 MORE IF YOU CAN SHOW YOU TRIED". The first 12 months are granted outright; ' +
+      'the second 12 are a renewal, and ISD grants it only "where the graduate satisfies the ' +
+      'immigration authorities that he or she has taken appropriate steps to access suitable ' +
+      'graduate level employment" — it names attendance at job interviews and signing up ' +
+      'with graduate employment agencies as the kind of evidence it wants. Keep that ' +
+      'evidence from month one. The second year is also subject to an overall EIGHT-year ' +
+      'limit on student conditions (as against seven at Level 8), and you may re-enter the ' +
+      'programme on achieving a higher award, but never more than twice in total. Everything ' +
+      'in ie-tlgp-level8 about the six-month notification clock and the recognised awarding ' +
+      'bodies applies here identically. Note that duration_months is 12, not 24, because 12 ' +
+      'is what is actually promised.',
+    quote: 'Graduates with an award at Level 9 or above on the National Framework of ' +
+      'Qualifications who qualify for the Programme will be granted permission for 12 months ' +
+      'initially. This will be renewed for a further period of twelve months (subject to the ' +
+      'overall eight year limit on student conditions not being exceeded) where the graduate ' +
+      'satisfies the immigration authorities that he or she has taken appropriate steps to ' +
+      'access suitable graduate level employment.',
+    source: 'Immigration Service Delivery (Department of Justice, Home Affairs and ' +
+      'Migration), Third level graduate programme, page last updated 28 March 2024',
+    source_url: 'https://www.irishimmigration.ie/my-situation-has-changed-since-i-arrived-in-ireland/third-level-graduate-programme/',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* =================================== NETHERLANDS =========================== */
+  {
+    id: 'nl-orientation-year-dutch-degree',
+    country: 'NL',
+    label: 'Orientation year for highly educated persons (zoekjaar hoogopgeleiden) — ' +
+      'Dutch accredited degree',
+    kind: 'open_work',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true,
+      max_years_since_graduation: 3
+    },
+    switch_route: 'Residence permit for work as a highly skilled migrant (kennismigrant), ' +
+      'which needs an IND-recognised sponsor as your employer, or the European Blue Card.',
+    salary_floor: {
+      amount: 3122.00, currency: 'EUR', period: 'month', year: 2026,
+      note: 'EUR 3,122.00 gross a month is the REDUCED highly-skilled-migrant salary ' +
+        'criterion and it is the entire point of this year. Without it the criterion is ' +
+        'EUR 4,357.00 under 30 and EUR 5,942.00 at 30 or over. Holiday allowance does not ' +
+        'count toward any of these.'
+    },
+    leads_to_pr: false,
+    notes: 'THIS IS THE DOOR FOR ANYONE WHO STUDIED IN THE NETHERLANDS, AND IT HAS NO ' +
+      'RANKING CONDITION — that condition belongs to the other door (see ' +
+      'nl-orientation-year-foreign-top200). The IND accepts an accredited Dutch ' +
+      'bachelor’s or master’s; a Dutch post-master’s programme of at least an ' +
+      'academic year (a minimum of 10 months); a Dutch PhD; a Dutch scientific-research ' +
+      'residence permit; an Erasmus Mundus Joint Master degree; or a Dutch study under the ' +
+      'Cultural Policy Act or Ministry of Foreign Affairs development policy. Twelve months ' +
+      'flat at every level, and the IND states it cannot be extended. THE THREE-YEAR WINDOW ' +
+      'IS THE FIGURE PEOPLE MISS: you must have completed the qualifying degree in the three ' +
+      'years before the date of your application. THE REAL VALUE IS NOT THE YEAR, IT IS THE ' +
+      'REDUCED SALARY CRITERION IT UNLOCKS — and the underrated part is that you get that ' +
+      'reduced criterion within three years of graduating even if you NEVER took the ' +
+      'orientation year. Do not count this year toward permanent residence: the IND classes ' +
+      'the orientation year as a TEMPORARY purpose of residence, so the five-year clock only ' +
+      'starts when you switch to the kennismigrant permit or the Blue Card. Fee for an ' +
+      'application submitted between 1 January 2026 and 1 January 2027: EUR 254.',
+    quote: 'To qualify, you will have to meet the following conditions. In the 3 years ' +
+      'before the date of your application: you have completed an accredited bachelor’s ' +
+      'or master’s programme in the Netherlands; or you have completed a ' +
+      'post-master’s study programme of at least an academic year (a minimum of 10 ' +
+      'months) in the Netherlands or you have obtained a PhD in the Netherlands.',
+    source: 'Immigration and Naturalisation Service (IND), Ministry of Justice and Security ' +
+      '— application form 9571 "Application for admission and residence for an orientation ' +
+      'year as a highly educated migrant seeking employment", January 2026',
+    source_url: 'https://ind.nl/en/forms/9571.pdf',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'nl-orientation-year-foreign-top200',
+    country: 'NL',
+    label: 'Orientation year for highly educated persons — degree from a designated ' +
+      'FOREIGN educational institution',
+    kind: 'open_work',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'masters',
+      institution_on_list: 'nl_ind_designated_foreign_top200',
+      max_years_since_graduation: 3
+    },
+    switch_route: 'Residence permit for work as a highly skilled migrant (kennismigrant) ' +
+      'with an IND-recognised sponsor, or the European Blue Card.',
+    salary_floor: {
+      amount: 3122.00, currency: 'EUR', period: 'month', year: 2026,
+      note: 'The same reduced highly-skilled-migrant criterion of EUR 3,122.00 gross a month ' +
+        'applies, either during the orientation year or within 3 years of the graduation or ' +
+        'doctoral defence date.'
+    },
+    leads_to_pr: false,
+    notes: 'YES — FOR A DEGREE EARNED ABROAD THERE IS A RANKING CONDITION, AND IT IS ' +
+      'STRICTER THAN "TOP 200 IN A RANKING". The IND requires the institution to be listed ' +
+      'in the TOP 200 OF AT LEAST TWO ranking lists FROM SEPARATE PUBLISHERS, and it names ' +
+      'the three publishers it will accept: Times Higher Education (World University ' +
+      'Rankings, and by Subject), Quacquarelli Symonds (QS World University Rankings, and by ' +
+      'subject), and ShanghaiRanking Consultancy (Academic Ranking of World Universities, ' +
+      'and the Global Ranking of Academic Subjects). Two lists from the SAME publisher count ' +
+      'as one. The subject-field lists count, but only if you graduated in the subject field ' +
+      'in which the institution is ranked. The ranking position is tested ON THE DATE YOU ' +
+      'COMPLETED the programme or PhD, not on the date you apply, and the IND asks for ' +
+      'documentary evidence — a screenshot — proving it. This door is open only at ' +
+      'master’s, post-master’s or PhD level; a foreign bachelor’s does not ' +
+      'qualify. You also need a Nuffic credential evaluation, and IELTS 6.0 or a comparable ' +
+      'test, unless your master’s, post-master’s or PhD was taught in English or ' +
+      'Dutch, or was obtained in an English-speaking country. The three-year window applies ' +
+      'here too. This is the form used from OUTSIDE the Netherlands; whether the same ' +
+      'ranking route can be used by someone already in the country was not established, ' +
+      'because the IND puts that behind an interactive questionnaire.',
+    quote: 'A designated foreign educational institution is an educational institution that ' +
+      'is listed in the top 200 of at least two - from separate publishers originating - ' +
+      'general ranking lists or available ranking lists by faculty or by subject field ... ' +
+      'This means that the educational institution must be listed in at least two of the ' +
+      'available lists (general, faculty or subject field-specific) from separate ' +
+      'publishers. Ranking lists published by the same publisher count as one.',
+    source: 'Immigration and Naturalisation Service (IND), Ministry of Justice and Security ' +
+      '— application form 9571, January 2026, footnote 1 and section 4 "Means of evidence"',
+    source_url: 'https://ind.nl/en/forms/9571.pdf',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ==================================== AUSTRALIA ============================= */
+  {
+    id: 'au-485-phew-general',
+    country: 'AU',
+    label: 'Temporary Graduate visa (subclass 485), Post-Higher Education Work stream — ' +
+      'general rule',
+    kind: 'open_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_on_list: 'au_cricos_registered_provider',
+      apply_from_inside: true
+    },
+    yields: {
+      by_level: { bachelors: 24, masters: 24, phd: 36 }
+    },
+    switch_route: 'The Department does not name a single successor visa on this page and ' +
+      'directs holders to its visa finder for skilled work visas. Not recorded here rather ' +
+      'than guessed.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'Two years for a bachelor (including honours) and for a masters by COURSEWORK or ' +
+      'EXTENDED; three years for a masters by RESEARCH and for a doctoral degree. The ' +
+      'masters figure above is 24 because coursework is what most candidates take — a ' +
+      'research masters gets 36 and the by_level figure understates it. Hong Kong and ' +
+      'British National Overseas passport holders get five years. INDIAN NATIONALS SHOULD ' +
+      'NOT USE THIS ROUTE’S FIGURES: see au-485-phew-aiecta, which is better at every ' +
+      'level above bachelor. The conditions that catch people are procedural, not academic. ' +
+      'You must be 35 or under when you apply (under 50 if you are using a research masters ' +
+      'or PhD, or hold a Hong Kong or BNO passport). You must be IN Australia when you ' +
+      'apply, and not in immigration clearance. You must have been awarded the degree in the ' +
+      'SIX MONTHS immediately before the day you apply, and hold or have recently held an ' +
+      'eligible Student visa. The course must have been with a CRICOS-registered Australian ' +
+      'provider offering degree-level programs. The visa cannot be extended, though a Second ' +
+      'Post-Higher Education Work stream visa of one to two years exists if you studied and ' +
+      'lived in a regional area. The age cap is tested at the DATE OF APPLICATION, not the ' +
+      'date of decision.',
+    quote: 'Bachelor degree (including honours) - 2 years; Masters (coursework and extended) ' +
+      '- 2 years; Masters (research) - 3 years; Doctoral degree - 3 years. ... You must be ' +
+      '35 years of age or under when you apply. ... You must be in Australia (but not in ' +
+      'immigration clearance) when you apply for this visa.',
+    source: 'Australian Government Department of Home Affairs, Temporary Graduate visa ' +
+      '(subclass 485), Post-Higher Education Work stream',
+    source_url: 'https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing/temporary-graduate-485/post-higher-education-work',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'au-485-phew-aiecta',
+    country: 'AU',
+    label: 'Temporary Graduate visa (subclass 485), Post-Higher Education Work stream — ' +
+      'AI-ECTA length of stay for Indian nationals',
+    kind: 'open_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_on_list: 'au_cricos_registered_provider',
+      apply_from_inside: true,
+      nationality_in: ['IN']
+    },
+    yields: {
+      by_level: { bachelors: 24, masters: 36, phd: 48 }
+    },
+    switch_route: 'The Department does not name a successor visa on this page.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'THIS IS THE ONE COUNTRY IN THE SET WHERE BEING AN INDIAN NATIONAL HELPS. Under ' +
+      'the Australia-India Economic Cooperation and Trade Agreement an Indian national gets ' +
+      'a YEAR MORE than the general rule at masters and doctoral level: bachelor including ' +
+      'honours 2 years; BACHELOR WITH FIRST CLASS HONOURS IN STEM, INCLUDING ICT, 3 YEARS; ' +
+      'masters coursework, extended AND research all 3 years; doctoral 4 years. The ' +
+      'first-class-honours-in-STEM case is a genuine three-year bachelor outcome and is not ' +
+      'representable in yields.by_level above, which carries the ordinary bachelor figure of ' +
+      '24 so that the number shown never promises more than a given applicant gets — read ' +
+      'this note before quoting the bachelor figure to a STEM honours graduate. Everything ' +
+      'else is identical to au-485-phew-general: age 35 or under at application, in ' +
+      'Australia when you apply, degree awarded in the six months before you apply, ' +
+      'CRICOS-registered provider, evidence of health insurance, an AFP check application ' +
+      'and English all attached at the time you apply.',
+    quote: 'The length of stay for Indian nationals, as agreed in the Australia India - ' +
+      'Economic Cooperation and Trade Agreement (AI-ECTA), is as follows: Bachelor degree ' +
+      '(including honours) - 2 years; Bachelor degree (with first class honours in STEM, ' +
+      'including ICT) - 3 years; Masters (coursework, extended and research) - 3 years; ' +
+      'Doctoral degrees (PhD) - 4 years.',
+    source: 'Australian Government Department of Home Affairs, Temporary Graduate visa ' +
+      '(subclass 485), Post-Higher Education Work stream, "How long can you stay"',
+    source_url: 'https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing/temporary-graduate-485/post-higher-education-work',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ====================================== SPAIN ============================== */
+  {
+    id: 'es-busqueda-empleo',
+    country: 'ES',
+    label: 'Autorizacion de residencia para busqueda de empleo o inicio de proyecto ' +
+      'empresarial (Hoja informativa 20)',
+    kind: 'no_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true
+    },
+    switch_route: 'Once you find work at the level of your studies, or start the business, ' +
+      'you apply for the corresponding authorisation under Ley Organica 4/2000 or Ley ' +
+      '14/2013 (the highly qualified professional route).',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'TWENTY-FOUR MONTHS, THE LONGEST WINDOW IN THIS WHOLE FILE, AND YOU MAY NOT WORK ' +
+      'FOR A SINGLE DAY OF IT. The ministry states it flatly: "no se esta autorizado a ' +
+      'trabajar". Accompanying family members are not authorised to work either. Treat this ' +
+      'as a runway to a job OFFER, not as a way to live in Spain — the first task in month ' +
+      'one is the offer, because the offer is what unlocks the work permit. The ' +
+      'authorisation is explicitly non-extendable (improrrogable). You must ALREADY have ' +
+      'held the long-duration study stay authorisation (estancia de larga duracion por ' +
+      'estudios), so this is not open to someone who studied on a short course, and the ' +
+      'qualification must reach European Qualifications Framework Level 6 (the university ' +
+      'grado) at an authorised higher-education institution in Spain. File in the 60 ' +
+      'calendar days BEFORE your study authorisation expires; filing in the 90 days after ' +
+      'expiry is possible but the ministry warns it may trigger a sanction procedure. You ' +
+      'must show funds of 100 per cent of the IPREM per month, or 50 per cent if ' +
+      'accommodation is already paid for.',
+    quote: 'Durante la vigencia de la autorizacion de residencia para la busqueda de empleo ' +
+      'o para emprender un proyecto empresarial, no se esta autorizado a trabajar.',
+    source: 'Ministerio de Inclusion, Seguridad Social y Migraciones, Hoja informativa 20, ' +
+      'last updated September 2025',
+    source_url: 'https://www.inclusion.gob.es/web/migraciones/w/20.-autorizacion-de-residencia-para-busqueda-de-empleo-o-inicio-de-proyecto-empresarial',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ====================================== ITALY ============================== */
+  {
+    id: 'it-attesa-occupazione',
+    country: 'IT',
+    label: 'Permesso di soggiorno per attesa occupazione, for a graduate of an Italian ' +
+      'university with no job to convert into',
+    kind: 'job_search',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true
+    },
+    switch_route: 'Conversion of the study permit into a permesso di soggiorno per lavoro ' +
+      'subordinato or lavoro autonomo, filed on the VA form (V2 / Z2 for a degree obtained ' +
+      'in Italy). For a holder of an Italian university qualification legally recognised by ' +
+      'the ministry this conversion is OUTSIDE the decreto flussi quota and can be filed at ' +
+      'ANY time of year — which is the single biggest advantage of studying in Italy.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'One year. The route is for the graduate who has a recognised Italian degree but ' +
+      'no employment relationship to convert into. TO GET IT YOU MUST FIRST REGISTER WITH ' +
+      'THE EMPLOYMENT CENTRE (centro per l’impiego) AND PUT THE PROOF OF REGISTRATION ' +
+      'IN THE POSTAL KIT you send to the Questura — that registration step is the one people ' +
+      'skip. Everything turns on the degree being from an Italian state or private ' +
+      'university LEGALLY RECOGNISED BY THE MINISTRY: with that recognition the conversion ' +
+      'to a work permit is outside the annual quota and can be filed any day of the year; ' +
+      'without it you are back in the click-day queue, where national places for ' +
+      'non-seasonal employment are gone within minutes. SOURCING CAVEAT, STATED PLAINLY: the ' +
+      '12-month figure comes from a Ministry of the Interior PREFECTURE page, not the ' +
+      'national reference page. It is a government domain, hence source_type official, but ' +
+      'it is regional and dated 2 December 2024. The national portal ' +
+      '(integrazionemigranti.gov.it, Ministero del Lavoro / Ministero dell’Interno) ' +
+      'describes attesa occupazione mainly as the permit for someone who has LOST A JOB, ' +
+      'granted for "un periodo non inferiore ad un anno", and confirms via the Ministry of ' +
+      'the Interior circular of 3 October 2016 that renewal beyond a year is possible ' +
+      'because the legislator set no maximum, with the Questure deciding case by case on ' +
+      'family ties, years in Italy and criminal record. renewable_to_months is left null ' +
+      'above because no page states a figure. The day-to-day working conditions of the ' +
+      'attesa occupazione permit itself are not published on either page, which is why kind ' +
+      'is job_search here.',
+    quote: 'Se si ha conseguito un titolo di studio, rilasciato da un’Universita ' +
+      'italiana statale o privata, legalmente riconosciuto dal MIUR e non si ha ' +
+      'l’opportunita di instaurare un rapporto di lavoro subordinato e quindi di ' +
+      'attivare la procedura di conversione, si puo chiedere il rinnovo del permesso di ' +
+      'soggiorno per attesa occupazione. A tale scopo e necessario iscriversi alle liste di ' +
+      'collocamento presso il centro per l’impiego ed inserire, nel KIT postale da ' +
+      'spedire alla Questura, la documentazione attestante l’iscrizione. Si otterra un ' +
+      'permesso di soggiorno per attesa occupazione della durata di 1 anno.',
+    source: 'Ministero dell’Interno, Prefettura - Ufficio Territoriale del Governo di ' +
+      'Reggio nell’Emilia, "Novita Decreto Flussi 2025", last updated 2 December 2024; ' +
+      'national context from integrazionemigranti.gov.it (Ministero del Lavoro e delle ' +
+      'Politiche Sociali / Ministero dell’Interno), "Il permesso di soggiorno per ' +
+      'attesa occupazione"',
+    source_url: 'https://prefettura.interno.gov.it/it/prefetture/reggio-emilia/novita-decreto-flussi-2025',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* =================================== SWITZERLAND =========================== */
+  {
+    id: 'ch-six-month-search',
+    country: 'CH',
+    label: 'Six-month period to seek employment after graduating from a Swiss higher ' +
+      'education institution (Art. 21 para. 3 FNIA)',
+    kind: 'job_search',
+    duration_months: 6,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_on_list: 'ch_swissuniversities_recognised_institutions'
+    },
+    switch_route: 'A cantonal residence permit for gainful employment. Your employer applies ' +
+      'to the cantonal labour market authority, which issues a preliminary decision and ' +
+      'sends the file to the SEM for approval.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'SIX MONTHS — THE SHORTEST WINDOW OF ANY DESTINATION IN THIS FILE — and the ' +
+      'clock runs from the END OF YOUR COURSE, not from the graduation ceremony. The ' +
+      'institution must be a recognised or accredited Swiss higher education institution on ' +
+      'the swissuniversities list at ' +
+      'https://www.swissuniversities.ch/en/higher-education-area/recognised-swiss-higher-education-institutions/ ' +
+      '— a private school in Switzerland is not automatically on it, and if it is not, this ' +
+      'six-month right does not exist for you. A JOB OFFER ALONE IS NEVER ENOUGH IN ' +
+      'SWITZERLAND: your employer must clear a labour-market test on qualifications, pay and ' +
+      'working conditions, and a federal quota place must still be available. The graduate ' +
+      'concession is that you may be admitted IN DEROGATION of the precedence of Swiss and ' +
+      'EU/EFTA workers — but only "if their work represents an overriding scientific or ' +
+      'economic interest", which is a real test, not a formality. SEM says to expect six to ' +
+      'eight weeks for the file to be processed, which is a quarter of your entire window, ' +
+      'so start applying before you finish. WHAT SEM DOES NOT PUBLISH is what work you may ' +
+      'do DURING the six months. The FAQ grants the period "in which to look for a job" and ' +
+      'is silent on the work right, so this route is classed job_search on the strength of ' +
+      'SEM’s own words rather than on a published work permission.',
+    quote: 'Third-country nationals who have graduated from a Swiss higher education ' +
+      'institution have a six-month period from the end of their course or training in ' +
+      'Switzerland in which to look for a job which matches their qualifications. In ' +
+      'derogation of the principle of precedence for Swiss and EU/EFTA nationals, they may ' +
+      'be admitted if their work represents an overriding scientific or economic interest.',
+    source: 'State Secretariat for Migration (SEM), FAQ - Working, section "Stays for ' +
+      'professional training", last modified 5 July 2026',
+    source_url: 'https://www.sem.admin.ch/sem/en/home/themen/arbeit/faq.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ======================================= UAE =============================== */
+  {
+    id: 'ae-jobseeker-visit',
+    country: 'AE',
+    label: 'Jobseeker visit visa (visit visa to explore job opportunities)',
+    kind: 'no_work',
+    duration_months: null,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      institution_on_list: 'ae_moe_best_500_universities',
+      max_years_since_graduation: 2
+    },
+    switch_route: 'Either the standard employer-sponsored work visa, valid two years and ' +
+      'renewable; or the Green visa, a renewable five-year residence visa that needs no ' +
+      'sponsor.',
+    salary_floor: null,
+    leads_to_pr: false,
+    notes: 'duration_months is null ON PURPOSE. The UAE does not operate a stay-back permit ' +
+      'tied to graduating from a UAE institution at all, so there is no "how long you get ' +
+      'after your degree" figure to publish. What exists is a VISIT visa you choose at 60, ' +
+      '90 or 120 days, for ONE TRIP, and rendering any of those three as a post-study ' +
+      'entitlement would misdescribe it. IT DOES NOT PERMIT WORK — it permits you to be in ' +
+      'the country while you look. THIS IS THE APPROVED-LIST TRAP IN ITS PUREST FORM: to ' +
+      'qualify as a graduate you must have graduated IN THE LAST TWO YEARS from one of the ' +
+      'best 500 universities in the world according to the classification approved by the ' +
+      'UAE Ministry of Education. The list is the Ministry’s, not QS’s or THE’s, ' +
+      'and u.ae does not reproduce it on this page. Note the route is open to graduates of ' +
+      'those universities ANYWHERE — it is not a UAE-graduate benefit. If your university is ' +
+      'not on the Ministry list, the only other door is to be at MOHRE professional skill ' +
+      'level 1, 2 or 3. A bachelor’s degree or equivalent and a financial guarantee are ' +
+      'required either way, and the qualification certificate must be attested.',
+    quote: 'Foreigners are granted a visit visa to search for a job without requiring a ' +
+      'host/sponsor in the country, for one trip. You can apply for a job-seeker visa with a ' +
+      'validity of either 60, 90 or 120 days. ... a graduate from the best 500 universities ' +
+      'in the world according to the classification approved by Ministry of Education and ' +
+      'must have graduated within the last 2 years.',
+    source: 'The Official Platform of the UAE Government (u.ae), Jobseeker visit visa, ' +
+      'updated 28 July 2026',
+    source_url: 'https://u.ae/en/information-and-services/visa-and-emirates-id/Types-of-visas/Visit-visa/jobseeker-visit-visa',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ==================================== HONG KONG ============================ */
+  {
+    id: 'hk-iang-recent',
+    country: 'HK',
+    label: 'Immigration Arrangements for Non-local Graduates (IANG) — recent graduate ' +
+      '(applying within 6 months of graduation)',
+    kind: 'open_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_on_list: 'hk_immd_authorised_post_secondary_institutions',
+      min_programme_months: 8
+    },
+    switch_route: 'None needed. IANG itself is the employment permission, and extensions of ' +
+      'stay are applied for under IANG rather than by switching to another scheme.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'TWENTY-FOUR MONTHS ON TIME LIMITATION ONLY, WITH NO OTHER CONDITIONS OF STAY — ' +
+      'no employer tie, no occupation restriction, no salary condition, and no job offer ' +
+      'needed. That is as clean as a post-study route gets. The scheme is quota-free and ' +
+      'non-sector-specific. Two conditions do the work. First, the qualification must be a ' +
+      'bachelor’s, master’s or doctoral degree, or a programme accredited at Hong ' +
+      'Kong Qualifications Framework Level 5 or above with 120 or more QF credits, in each ' +
+      'case full-time, locally accredited, and with a study period of NOT LESS THAN ONE ' +
+      'ACADEMIC YEAR (min_programme_months above is set to 8 as the conservative reading of ' +
+      'one academic year; ImmD states the condition in academic years, not months). It must ' +
+      'be awarded by an institution on ImmD’s list of authorised post-secondary ' +
+      'institutions, the annex to form ID 991 at ' +
+      'https://www.immd.gov.hk/eng/forms/forms/id-e-991.html — check that before you enrol. ' +
+      'Second, the SIX-MONTH CLOCK RUNS FROM THE DATE PRINTED ON THE GRADUATION CERTIFICATE, ' +
+      'and crossing it turns a no-offer-needed application into one that requires an offer ' +
+      '(see hk-iang-non-recent). NATIONALITY BARS THAT ARE EASY TO MISS: IANG does not apply ' +
+      'at all to nationals of Afghanistan, Cuba and the Democratic People’s Republic of ' +
+      'Korea; and for nationals of Laos, Nepal and Vietnam it applies only to qualifications ' +
+      'from UGC-funded universities on locally accredited local programmes, excluding ' +
+      'self-financing programmes, continuing-education arms and exchange or short-term ' +
+      'study. These are exclusions, and the schema in this file carries only allow-lists, so ' +
+      'they are stated here rather than in requires. Approval is discretionary: the Director ' +
+      'of Immigration reserves absolute discretion to refuse even where every criterion is ' +
+      'met.',
+    quote: 'Non-local recent graduates who wish to apply to stay and work in the HKSAR are ' +
+      'not required to have secured an offer of employment upon application. They may be ' +
+      'granted 24 months’ stay on time limitation only without other conditions of stay ' +
+      'provided that normal immigration requirements are met.',
+    source: 'Immigration Department, Government of the Hong Kong Special Administrative ' +
+      'Region, Immigration Arrangements for Non-local Graduates (IANG)',
+    source_url: 'https://www.immd.gov.hk/eng/services/visas/IANG.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'hk-iang-non-recent',
+    country: 'HK',
+    label: 'Immigration Arrangements for Non-local Graduates (IANG) — non-recent graduate ' +
+      '(applying more than 6 months after graduation)',
+    kind: 'open_work',
+    duration_months: 24,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_on_list: 'hk_immd_authorised_post_secondary_institutions',
+      min_programme_months: 8
+    },
+    switch_route: 'None needed. IANG itself is the employment permission.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'THE SAME 24 MONTHS, BUT YOU MUST ARRIVE WITH A JOB OFFER. Once you are more than ' +
+      'six months past the date on your graduation certificate you are a NON-RECENT ' +
+      'graduate, and ImmD requires an offer of employment at the point of application. It ' +
+      'will be considered favourably "so long as the job is at a level commonly taken up by ' +
+      'degree holders and the remuneration package is at market level" — so the bar is real ' +
+      'but not a published salary figure, which is why salary_floor is null. This route is ' +
+      'genuinely useful: it means an Indian graduate of a Hong Kong programme who went home ' +
+      'and worked for two years can come BACK on IANG, which most destinations do not allow ' +
+      'at all. Note there is no age cap and no quota. Everything in hk-iang-recent about the ' +
+      'authorised-institutions list (annex to form ID 991) and the nationality bars ' +
+      '(Afghanistan, Cuba, DPRK excluded outright; Laos, Nepal and Vietnam restricted to ' +
+      'UGC-funded university local programmes) applies here identically. Processing runs ' +
+      'about four weeks for non-recent graduates against two for recent ones, and longer in ' +
+      'the June-to-August rush.',
+    quote: 'Non-local non-recent graduates who wish to return to work in the HKSAR are ' +
+      'required to secure an offer of employment upon application. The applications will be ' +
+      'favourably considered so long as the job is at a level commonly taken up by degree ' +
+      'holders and the remuneration package is at market level. They may be granted 24 ' +
+      'months’ stay on time limitation only without other conditions of stay provided ' +
+      'that normal immigration requirements are met.',
+    source: 'Immigration Department, Government of the Hong Kong Special Administrative ' +
+      'Region, Immigration Arrangements for Non-local Graduates (IANG)',
+    source_url: 'https://www.immd.gov.hk/eng/services/visas/IANG.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ====================================== SWEDEN ============================= */
+  {
+    id: 'se-job-search-permit',
+    country: 'SE',
+    label: 'Residence permit to look for work or investigate starting a business after ' +
+      'completing studies',
+    kind: 'job_search',
+    duration_months: 12,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true
+    },
+    yields: {
+      by_level: { bachelors: 12, masters: 12, phd: 18 }
+    },
+    switch_route: 'A Swedish work permit. Migrationsverket does not set out that route on ' +
+      'this page, so its conditions are not recorded here.',
+    salary_floor: null,
+    leads_to_pr: null,
+    notes: 'Up to one year after bachelor’s or master’s level studies; between one ' +
+      'year and 18 months after doctoral studies — a level split our flat 12-month record ' +
+      'used to miss. THE PERMIT CAN NEVER RUN LONGER THAN YOUR PASSPORT IS VALID, which is ' +
+      'the most common reason people get less than they expected: renew the passport first. ' +
+      '"COMPLETED STUDIES" IS STRICTER THAN IT SOUNDS: you must have completed the ENTIRE ' +
+      'programme you were first admitted to, with passing grades in ALL your courses. One ' +
+      'outstanding resit or a late thesis grade fails the test. The recovery is procedural, ' +
+      'so learn it now — you must SUBMIT THE APPLICATION BEFORE YOUR CURRENT ' +
+      'HIGHER-EDUCATION PERMIT EXPIRES, and if your results are not all in you apply anyway ' +
+      'and supplement with the completion certificate later. Applying after the student ' +
+      'permit has expired is not recoverable. Higher vocational education (yrkeshogskola) ' +
+      'does not count as higher education for this permit. Fee SEK 1,500 for adults, and you ' +
+      'must show maintenance of at least SEK 10,656 a month for 2026 applications, plus ' +
+      'SEK 4,440 for a spouse or partner and SEK 2,664 for each child. WHAT IS NOT ' +
+      'PUBLISHED: your own right to work during the permit. Migrationsverket states only ' +
+      'that accompanying adult family members are permitted to work and is silent on the ' +
+      'holder, which is why kind is job_search here rather than open_work.',
+    quote: 'After completing bachelor’s or master’s level studies, you can be ' +
+      'granted a residence permit for up to one year. After completing doctoral studies, you ' +
+      'can be granted a residence permit for between one year and 18 months.',
+    source: 'Swedish Migration Agency (Migrationsverket), "Look for work after completing ' +
+      'your studies in Sweden"',
+    source_url: 'https://www.migrationsverket.se/en/you-want-to-extend/study/look-for-work-after-completing-your-studies-in-sweden.html',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* ==================================== SINGAPORE ============================ */
+  {
+    id: 'sg-ltvp-graduate',
+    country: 'SG',
+    label: 'Long-Term Visit Pass (LTVP), category "Graduate from an Institute of Higher ' +
+      'Learning seeking Employment in Singapore"',
+    kind: 'no_work',
+    duration_months: null,
+    renewable_to_months: null,
+    requires: {
+      degree_from_destination: true,
+      institution_recognised: true
+    },
+    switch_route: 'Employment Pass, issued by the Ministry of Manpower. Two gates, both of ' +
+      'which must be cleared: first the EP qualifying salary, then the points-based ' +
+      'Complementarity Assessment Framework (COMPASS), where you need 40 points.',
+    salary_floor: {
+      amount: 5600, currency: 'SGD', period: 'month', year: 2026,
+      note: 'SGD 5,600 a month at age 23 or below for all sectors except financial services, ' +
+        'rising with age to SGD 10,700 at 45 and above; financial services starts at ' +
+        'SGD 6,200. For new applications from 1 January 2027 the base figures become ' +
+        'SGD 6,000 and SGD 6,600. This is the entry bar only — COMPASS separately scores ' +
+        'your salary against sector percentiles.'
+    },
+    leads_to_pr: null,
+    notes: 'duration_months IS NULL BECAUSE ICA DOES NOT PUBLISH ONE. The ICA page for this ' +
+      'LTVP category sets out the documents you need (travel document, educational ' +
+      'certificates and transcripts, a photo), the fees (SGD 45 at submission, SGD 60 to ' +
+      'issue the LTVP, SGD 30 for a multiple-journey visa) and a six-week processing time — ' +
+      'and states no duration at all. We are not going to put a number here that ICA does ' +
+      'not publish. AN LTVP IS A VISIT PASS, NOT A WORK PASS: it does not itself authorise ' +
+      'employment, and an employer must obtain a work pass for you. Singapore has no ' +
+      'dedicated post-study work visa and your Student’s Pass is tied to your course ' +
+      'and ends with it, so there is no automatic stay-back period to plan around. THE ' +
+      'CONDITION THAT COSTS INDIAN CANDIDATES MOST IS ON THE SWITCH, NOT THIS PASS: COMPASS ' +
+      'criterion C3 "Diversity" scores you on how large a share of the employer’s ' +
+      'professional, managerial, executive and technical staff already hold your ' +
+      'nationality — under 5 per cent scores 20 points, 5 to under 25 per cent scores 10, ' +
+      'and 25 per cent or more scores ZERO. Applying to a Singapore firm whose PMET ' +
+      'workforce is already heavily Indian costs you 20 of the 40 points you need. Criterion ' +
+      'C2 awards 20 points only for degrees from the top 100 QS universities, other highly ' +
+      'reputed Asian universities, Singapore’s autonomous universities, or institutions ' +
+      'endorsed by a sector agency; everything else scores 10.',
+    quote: 'Applications will be processed within 6 weeks, provided all the required ' +
+      'documents are submitted and in order. ... From the applicant: A coloured digital ' +
+      'photograph ...; Travel document; Educational certificate(s) and transcripts.',
+    source: 'Immigration & Checkpoints Authority (ICA), Long-Term Visit Pass — Graduate from ' +
+      'an Institute of Higher Learning seeking Employment in Singapore',
+    source_url: 'https://www.ica.gov.sg/reside/LTVP/apply/graduate-from-an-institute-of-higher-learning-seeking-employment-in-singapore',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+
+  /* =================================== NEW ZEALAND =========================== */
+  {
+    id: 'nz-pswv-degree',
+    country: 'NZ',
+    label: 'Post-Study Work Visa — degree at level 7 or higher',
+    kind: 'open_work',
+    duration_months: null,
+    renewable_to_months: null,
+    requires: {
+      level_min: 'bachelors',
+      degree_from_destination: true,
+      institution_recognised: true
+    },
+    switch_route: 'Immigration New Zealand states on this page that the visa can lead to a ' +
+      'resident visa but does not name the route, so it is not recorded here.',
+    salary_floor: null,
+    leads_to_pr: true,
+    notes: 'duration_months IS NULL BECAUSE INZ PUBLISHES A CAP, NOT A FIGURE: "up to 3 ' +
+      'years depending on the level of your qualification and how long you spent studying ' +
+      'for it", and there is no level-by-level table on this page. Treat 36 months as the ' +
+      'ceiling, never as the entitlement. WITH A DEGREE AT LEVEL 7 OR HIGHER YOU CAN DO ANY ' +
+      'LEGAL WORK, IN ANY JOB, ANYWHERE IN NEW ZEALAND — that is the cleanest work right in ' +
+      'this file after Hong Kong. You can be a sole trader or own a business, but if you ' +
+      'operate a business as owner you cannot employ anyone, directly or through a manager. ' +
+      'THE 30-WEEK RULE IS THE ONE THAT FAILS PEOPLE: a degree at level 7 or higher must ' +
+      'have been studied FULL-TIME IN NEW ZEALAND for at least 30 weeks, so a short top-up ' +
+      'or a largely online programme does not qualify. Apply no later than 3 months after ' +
+      'your student visa expires; 6 months for a doctoral degree; 12 months in the specific ' +
+      'case where you immediately went on to a higher qualification that took under 30 ' +
+      'weeks. You must show at least NZD 5,000 in bank statements in your own name whether ' +
+      'you apply for 1, 2 or 3 years. ONE VISA, ONCE, EVER — and if you do not complete the ' +
+      'qualification recorded on your student visa, INZ may not approve the application at ' +
+      'all. From 16 November 2026 eligibility extends to holders of a New Zealand level 7 ' +
+      'graduate diploma studied full-time who also hold a bachelor’s degree from New ' +
+      'Zealand or overseas.',
+    quote: 'You can stay and work in New Zealand for up to 3 years depending on the level of ' +
+      'your qualification and how long you spent studying for it. ... If you have a degree ' +
+      'level 7 or higher qualification, you can do any work in any job, anywhere in New ' +
+      'Zealand ... If you have studied a degree level 7 or higher qualification, you must ' +
+      'have studied it full-time for at least 30 weeks in New Zealand.',
+    source: 'Immigration New Zealand, Post-Study Work Visa',
+    source_url: 'https://www.immigration.govt.nz/new-zealand-visas/visas/visa/post-study-work-visa',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  },
+  {
+    id: 'nz-pswv-nondegree',
+    country: 'NZ',
+    label: 'Post-Study Work Visa — non-degree qualification at level 7 or lower',
+    kind: 'open_work',
+    duration_months: null,
+    renewable_to_months: null,
+    requires: {
+      degree_from_destination: true,
+      institution_on_list: 'nz_inz_eligible_pswv_qualifications'
+    },
+    switch_route: 'INZ does not name a successor route on this page.',
+    salary_floor: null,
+    leads_to_pr: true,
+    notes: 'THIS IS A DIFFERENT VISA IN PRACTICE, EVEN THOUGH IT HAS THE SAME NAME. Two ' +
+      'conditions apply that do not apply at degree level. First, the qualification must ' +
+      'appear on INZ’s published list of qualifications eligible for a Post-Study Work ' +
+      'Visa — being a New Zealand qualification is not enough. Second, YOU MUST WORK IN A ' +
+      'JOB RELATED TO WHAT YOU STUDIED, and INZ writes that restriction into your visa ' +
+      'conditions, so taking an unrelated job is a breach, not a career choice. Your study ' +
+      'must also have been full-time in New Zealand for the FULL duration required to gain ' +
+      'the qualification, not merely 30 weeks. duration_months is null for the same reason ' +
+      'as nz-pswv-degree: INZ publishes only "up to 3 years, depending on the level of your ' +
+      'qualification and how long you spent studying for it". Everything else — the NZD ' +
+      '5,000 funds, the one-visa-ever rule, the 3-month application deadline after the ' +
+      'student visa expires — applies as at degree level.',
+    quote: 'If you have a non-degree level 7 or lower qualification and your qualification ' +
+      'is on the list of qualifications eligible for a Post-Study Work Visa, you must work ' +
+      'in a job that is related to what you studied - this will be listed in the conditions ' +
+      'on your visa.',
+    source: 'Immigration New Zealand, Post-Study Work Visa',
+    source_url: 'https://www.immigration.govt.nz/new-zealand-visas/visas/visa/post-study-work-visa',
+    source_type: 'official',
+    checked_on: '2026-09-07'
+  }
+];
+
 window.INVOLVE_REQUIREMENTS = {};
 </script>
 <script>
@@ -2972,7 +4331,10 @@ window.INVOLVE_PAYLOAD_LABELS = {
   sourced:  'which country records are sourced today',
   country:  'the country you picked',
   viewing:  'which country you were looking at',
-  nationality: 'the nationality you selected'
+  nationality: 'the nationality you selected',
+  studiedIn:   'whether you studied in that country or elsewhere',
+  onList:      'whether you said your institution is on that country’s approved list',
+  stemDesignated: 'whether you said your programme is STEM-designated in the United States'
 };
 
 /* Two tools send a key called `pool` and it means opposite things: in
@@ -3149,7 +4511,7 @@ window.involveGate = function (mount, opts) {
 };
 </script>
 <script>
-var VIEWS = {"visa": {"title": "Visa and post-study work rights", "html": "<div data-view=\"visa\"><div class=\"toolbar-strip\"><div class=\"wrap\"><span class=\"stamp is-unsourced\" id=\"vStamp\">Needs data</span>\n<span id=\"vNote\"></span></div></div><main class=\"wrap\">\n<div class=\"tool-head\">\n  <h1>Visa and post-study work rights</h1>\n  <p class=\"lede\">How long each country lets you stay after you graduate, what you can do during that\n  window, and what you have to switch onto afterwards &mdash; answered for the passport you actually\n  hold, not for a generic international student. This is the fact that should decide your country,\n  and it is the one most often quoted out of date.</p>\n</div>\n<div class=\"panel\" style=\"border-color:var(--ink)\">\n  <h3>Why this page is dated on every line</h3>\n  <p>Immigration rules change on political timelines, not academic ones. A visa page without a date\n  on it is worse than no page, because a student reads it, picks a country, and finds out eighteen\n  months later.</p>\n  <p style=\"margin-bottom:0\">The UK is the live example. Almost every study-abroad site still\n  advertises two years of post-study work there. That is about to stop being true, and the date it\n  stops falls in the middle of this application cycle.</p>\n</div>\n<div class=\"panel\">\n  <div class=\"pickers\">\n    <div>\n      <label for=\"vNat\">What passport do you hold?</label>\n      <select id=\"vNat\"></select>\n    </div>\n    <div>\n      <label for=\"vSel\">Which country are you looking at?</label>\n      <select id=\"vSel\"></select>\n    </div>\n  </div>\n  <p class=\"hint\" style=\"margin-bottom:0\">Nationality changes the answer more than most sites admit.\n  An EU passport means several of these countries need no post-study permit at all. An Indian\n  passport is worth an extra year in Australia and a decade in the American green card queue.\n  The default is India because that is who asks most often; change it and every card below changes\n  with it. One country at a time, because reading all sixteen end to end is thirty screens on a\n  phone, which is how people miss the one they came for.</p>\n</div>\n<div id=\"vout\"></div>\n<div id=\"vstatic\"></div>\n</main></div>", "js": "\n(function(){\n  var C=window.INVOLVE_COUNTRIES||[], ok=C.filter(function(c){return c.status==='verified';});\n  var NATS=(window.INVOLVE_NATIONALITIES||[]).slice().sort(function(a,b){\n    return a.name<b.name?-1:a.name>b.name?1:0;});\n  var NRULES=window.INVOLVE_NATIONALITY_RULES||[];\n  var DEFAULT_NAT='IN';\n\n  function esc(s){return String(s).replace(/[&<>\"]/g,function(ch){\n    return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[ch];});}\n\n  /* The header used to say \"16 of 16 countries sourced\" while Germany carried\n     source_url: null and three records were flagged as not yet confirmed against\n     the authority's own page. Count what is actually there. */\n  var sourced=ok.filter(function(r){return r.source_url&&String(r.source_url).trim();});\n  var pending=ok.filter(function(r){return r.needs_official_confirmation;});\n  var unlinked=ok.filter(function(r){return !(r.source_url&&String(r.source_url).trim());});\n  var note=sourced.length+' of '+C.length+' countries carry a link to the page the figures were read from.';\n  if(unlinked.length) note+=' '+unlinked.map(function(r){return r.name;}).join(', ')+\n    (unlinked.length===1?' has no source link at all.':' have no source link at all.');\n  if(pending.length) note+=' '+pending.length+' record'+(pending.length===1?' is':'s are')+\n    ' not yet confirmed against the government\u2019s own page ('+\n    pending.map(function(r){return r.name;}).join(', ')+').';\n  note+=' '+NRULES.length+' nationality-specific rules across '+\n    Object.keys(NRULES.reduce(function(a,r){a[r.country]=1;return a;},{})).length+\n    ' of them, for '+NATS.length+' nationalities.'+\n    ' Fields the authority does not publish are left blank, not guessed.';\n  document.getElementById('vNote').textContent=note;\n  var s=document.getElementById('vStamp');\n  if(sourced.length===C.length&&!pending.length){s.className='stamp is-ready';s.textContent='Ready';}\n  else {s.className='stamp is-pending';s.textContent='Partial';}\n\n  var LEVELS=[['bachelors','bachelor\u2019s'],['masters','master\u2019s'],['phd','doctoral']];\n  var MAXWORDS=/\\b(up to|capped by|depends on|depending on|maximum|no more than)\\b/i;\n  var MONTHS=['January','February','March','April','May','June','July','August','September',\n    'October','November','December'];\n\n  function longDate(iso){\n    var p=String(iso).split('-');\n    if(p.length!==3) return iso;\n    return String(Number(p[2]))+' '+MONTHS[Number(p[1])-1]+' '+p[0];\n  }\n\n  function firstSentence(t){\n    var s=String(t||'').split(/\\.\\s/)[0];\n    return s?(/[.!?]$/.test(s)?s:s+'.'):'';\n  }\n\n  function byLevelText(r){\n    var lv=r.duration_by_level;\n    if(!lv) return null;\n    var parts=[],distinct={};\n    for(var i=0;i<LEVELS.length;i++){\n      var v=lv[LEVELS[i][0]];\n      parts.push(LEVELS[i][1]+' '+(v==null?'not published':v+' months'));\n      distinct[String(v)]=1;\n    }\n    // Nothing to add when every level is the headline figure.\n    if(Object.keys(distinct).length===1&&String(r.duration_months)===Object.keys(distinct)[0]) return null;\n    return parts.join(' \u00b7 ');\n  }\n\n  /* Canada and New Zealand publish a CEILING; Australia's figure is a FLOOR.\n     Rendering both as a bare number made the comparison read backwards, so the\n     qualifier goes in the metric row itself, with the condition attached. */\n  function durationCell(r){\n    if(r.duration_months==null){\n      return '<span class=\"v wrapcell\">not published'+\n        '<span class=\"cell-note\">'+esc(firstSentence(r.duration_note))+'</span></span>';\n    }\n    var lv=r.duration_by_level||{};\n    var vals=[lv.bachelors,lv.masters,lv.phd].filter(function(v){return v!=null;});\n    var lvMax=vals.length?Math.max.apply(null,vals):null;\n    var first=firstSentence(r.duration_note);\n    var isMax=MAXWORDS.test(first);\n    var isFloor=!isMax&&lvMax!=null&&lvMax>r.duration_months;\n\n    var qual='', cond='';\n    if(isMax){\n      qual='<span class=\"dur-qual\">maximum, not guaranteed</span>';\n      cond=first;\n    } else if(isFloor){\n      qual='<span class=\"dur-qual\">guaranteed floor \u2014 more at some levels</span>';\n      cond=byLevelText(r)||first;\n    }\n    var extra='';\n    if(r.duration_months_from&&r.duration_months_from.months!=null){\n      extra='<span class=\"cell-note\">'+r.duration_months_from.months+' months for applications from '+\n        esc(longDate(r.duration_months_from.date))+'.</span>';\n    }\n    return '<span class=\"v wrapcell\">'+r.duration_months+' months'+qual+\n      (cond?'<span class=\"cell-note\">'+esc(cond)+'</span>':'')+extra+'</span>';\n  }\n\n  function money(n){\n    var s=String(n).split('.');\n    s[0]=s[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g,',');\n    return s.join('.');\n  }\n\n  function salaryCell(t){\n    if(!t) return null;\n    var head;\n    if(t.amount==null){\n      head='not published';\n    } else {\n      head=t.currency+' '+money(t.amount)+' a '+(t.period||'year')+(t.year?' ('+t.year+')':'');\n    }\n    return '<span class=\"v wrapcell\">'+esc(head)+\n      (t.note?'<span class=\"cell-note\">'+esc(t.note)+'</span>':'')+'</span>';\n  }\n\n  function prCell(r){\n    var head;\n    if(r.leads_to_pr===true) head='Yes'+(r.pr_after_years!=null?', after '+r.pr_after_years+\n      ' year'+(r.pr_after_years===1?'':'s'):'');\n    else if(r.leads_to_pr===false) head='No';\n    else head='not stated on the pages checked';\n    return '<span class=\"v wrapcell\">'+esc(head)+\n      (r.pr_note?'<span class=\"cell-note\">'+esc(r.pr_note)+'</span>':'')+'</span>';\n  }\n\n  function plainRow(k,v){\n    return '<div class=\"metric-row\"><span class=\"k\">'+k+'</span><span class=\"v wrapcell\">'+\n      esc(v)+'</span></div>';\n  }\n\n  /* ------------------------------------------------------------------\n     NATIONALITY MATCHING.\n\n     data/nationality.js is deliberately small: 27 sourced rules, not one\n     per (country, nationality) pair. Roughly two thirds of pairs match\n     nothing, and its header is explicit that the correct output there is\n     to SAY SO rather than to invent a difference. This function returns\n     the rules that actually apply and nothing else; the caller prints the\n     honest sentence when the list comes back empty.\n     ------------------------------------------------------------------ */\n  var NAT_BY_CODE={};\n  for(var ni=0;ni<NATS.length;ni++) NAT_BY_CODE[NATS[ni].code]=NATS[ni];\n\n  function natGroups(code){\n    var n=NAT_BY_CODE[code];\n    return (n&&n.groups)||[];\n  }\n  function ruleApplies(rule,code){\n    var a=rule.applies_to||{}, g=natGroups(code), i;\n    if(a.nationalities) return a.nationalities.indexOf(code)!==-1;\n    if(a.groups){\n      for(i=0;i<a.groups.length;i++) if(g.indexOf(a.groups[i])!==-1) return true;\n      return false;\n    }\n    if(a.all_except_groups){\n      for(i=0;i<a.all_except_groups.length;i++) if(g.indexOf(a.all_except_groups[i])!==-1) return false;\n      return true;\n    }\n    return false;   /* a rule that targets nobody matches nobody */\n  }\n  /* not_required first: it is the one kind that makes everything above it\n     on the card irrelevant, so burying it under three paragraphs of a route\n     the reader does not need would be the worst ordering available. */\n  var KIND_ORDER={not_required:0,restriction:1,advantage:2,alternative_route:3,watch_out:4,\n    no_difference:5};\n  var KIND_LABEL={not_required:'You do not need this route',restriction:'Harder for you',\n    advantage:'Better for you',alternative_route:'Another route open to you',\n    watch_out:'Watch out',no_difference:'Your passport makes no difference here'};\n\n  function rulesFor(country,code){\n    return NRULES.filter(function(r){return r.country===country&&ruleApplies(r,code);})\n      .sort(function(a,b){return (KIND_ORDER[a.kind]||9)-(KIND_ORDER[b.kind]||9);});\n  }\n\n  /* A national of the destination does not need a post-study work route into\n     their own country. This is not in data/nationality.js and should not be:\n     it is definitional, not something read off a government page, and filing\n     sixteen sourceless records to express it would be worse than saying it\n     here. Without it the tool told a British graduate in the UK to apply for\n     the Graduate visa, and a Singaporean in Singapore that COMPASS would score\n     their passport. */\n  /* countries.js uses 'UK'; ISO, and therefore the nationality list, uses 'GB'.\n     Without this a British graduate in the UK matched nothing and was shown the\n     Graduate visa as though they needed it. */\n  var CODE_ALIAS={GB:'UK',UK:'GB'};\n  function sameCountry(cc,nc){ return cc===nc||CODE_ALIAS[nc]===cc; }\n  function ownCountry(r,code){\n    if(!sameCountry(r.code,code)) return null;\n    var nat=NAT_BY_CODE[code];\n    return '<div class=\"r\"><span class=\"natkind k-not_required\">This is your own country</span>'+\n      '<h4>None of this applies to you.</h4>'+\n      '<p>You are a national of '+esc(r.name)+', so there is no post-study work route for you to '+\n      'apply for and nothing on this card is a permission you need. It is here because you may be '+\n      'weighing '+esc(r.name)+' against somewhere you would need one. Pick another country above '+\n      'and the card will tell you what you would face there.</p></div>';\n  }\n\n  function ruleHtml(r){\n    var srcs=(r.source_urls||[]).filter(function(u){return u&&u!==r.source_url;});\n    return '<div class=\"r\"><span class=\"natkind k-'+esc(r.kind)+'\">'+\n      esc(KIND_LABEL[r.kind]||r.kind)+'</span>'+\n      '<h4>'+esc(r.headline)+'</h4>'+\n      '<p>'+esc(r.detail)+'</p>'+\n      '<p class=\"src\">'+esc(r.source||'')+\n      (r.source_url?'. <a href=\"'+esc(r.source_url)+'\" rel=\"noopener\">Source</a>':'')+\n      (srcs.length?', '+srcs.map(function(u,i){\n        return '<a href=\"'+esc(u)+'\" rel=\"noopener\">source '+(i+2)+'</a>';}).join(', '):'')+\n      '. Checked '+esc(r.checked_on||'')+\n      (r.source_type==='official'?'':' \\u2014 government agency, not a government domain')+\n      '.</p></div>';\n  }\n\n  function natBlock(r,code){\n    var nat=NAT_BY_CODE[code], dem=(nat&&(nat.demonym||nat.name))||'your';\n    var rules=rulesFor(r.code,code), own=ownCountry(r,code);\n    var head='<div class=\"natblock\"><h4 style=\"font-size:1rem;margin-bottom:9px\">'+\n      'On '+esc(dem==='your'?'your':dem)+' passport</h4>';\n    if(own) return head+own+rules.map(ruleHtml).join('')+'</div>';\n    if(!rules.length){\n      /* The sentence nationality.js instructs a renderer to print. It is true\n         for about two thirds of pairs and it is the right answer for them. */\n      return head+'<p class=\"natnone\">No nationality-specific rule was found for '+\n        esc((nat&&nat.name)||'your nationality')+' in '+esc(r.name)+\n        '. The general rules above apply to you as they are written.</p></div>';\n    }\n    return head+rules.map(ruleHtml).join('')+'</div>';\n  }\n\n  function card(r,natCode){\n    var out='<div class=\"panel\"><h3>'+esc(r.name)+'</h3>'+\n      plainRow('Route',r.route)+\n      '<div class=\"metric-row\"><span class=\"k\">How long you get</span>'+durationCell(r)+'</div>';\n\n    var bl=byLevelText(r);\n    if(bl) out+=plainRow('By level of study',bl);\n\n    out+=plainRow('Job offer needed to apply',r.job_offer_required?'Yes':'No')+\n      plainRow('What you can do',r.work_restrictions)+\n      plainRow('What you switch onto next',r.switch_route);\n\n    var sal=salaryCell(r.switch_salary_threshold);\n    if(sal) out+='<div class=\"metric-row\"><span class=\"k\">Salary you must be paid to switch</span>'+\n      sal+'</div>';\n\n    if(r.apply_deadline) out+=plainRow('When you have to apply',r.apply_deadline);\n    out+=plainRow('Known costs',r.known_costs||'not recorded');\n    out+='<div class=\"metric-row\"><span class=\"k\">Leads to permanent residence</span>'+prCell(r)+'</div>';\n\n    out+='<p class=\"hint\" style=\"margin-top:14px\">'+esc(r.duration_note)+'</p>';\n    if(r.watch_out) out+='<div class=\"flag\"><p><strong>Watch out.</strong> '+esc(r.watch_out)+'</p></div>';\n    if(r.india_watch_out&&natCode==='IN') out+='<div class=\"flag\"><p><strong>If you are applying '+\n      'from India.</strong> '+esc(r.india_watch_out)+'</p></div>';\n    out+=natBlock(r,natCode);\n\n    var extra=(r.source_urls||[]).filter(function(u){return u&&u!==r.source_url;});\n    out+='<div style=\"font-size:.78rem;color:var(--ink-faint);margin-top:14px;padding-top:11px;border-top:1px solid var(--rule)\">'+\n      esc(r.source)+(r.source_url?'. <a href=\"'+esc(r.source_url)+'\" rel=\"noopener\">Source</a>':'')+\n      '. Checked '+esc(r.checked_on)+'.'+\n      (r.needs_official_confirmation?' Not yet confirmed against the government\u2019s own page.':'')+\n      (extra.length?'<br>Also read: '+extra.map(function(u,i){\n        return '<a href=\"'+esc(u)+'\" rel=\"noopener\">source '+(i+2)+'</a>';}).join(', ')+'.':'')+\n      '</div></div>';\n    return out;\n  }\n\n  var sel=document.getElementById('vSel'), vout=document.getElementById('vout'),\n      natSel=document.getElementById('vNat');\n  sel.innerHTML=ok.map(function(r){\n      return '<option value=\"'+esc(r.code)+'\">'+esc(r.name)+'</option>';}).join('')+\n    '<option value=\"__all\">All '+ok.length+' countries, one after another</option>';\n  natSel.innerHTML=NATS.map(function(n){\n      return '<option value=\"'+esc(n.code)+'\">'+esc(n.name)+'</option>';}).join('');\n\n  function natCode(){ return natSel.value||DEFAULT_NAT; }\n\n  function draw(){\n    var code=natCode();\n    if(sel.value==='__all'){\n      vout.innerHTML=ok.map(function(r){return card(r,code);}).join('');\n    } else {\n      var r=ok.filter(function(x){return x.code===sel.value;})[0];\n      vout.innerHTML=r?card(r,code):'';\n    }\n  }\n  sel.addEventListener('change',draw);\n  natSel.addEventListener('change',draw);\n  if(ok.length) sel.value=ok[0].code;\n  if(NAT_BY_CODE[DEFAULT_NAT]) natSel.value=DEFAULT_NAT;\n  draw();\n\n  var out='';\n  var todo=C.filter(function(c){return c.status!=='verified';});\n  if(todo.length){\n    out+='<div class=\"panel\"><h3>Not sourced yet</h3><div class=\"empty\"><p>'+\n      todo.map(function(c){return esc(c.name);}).join(', ')+'.</p>'+\n      '<p style=\"margin-bottom:0\">These are blank on purpose. Every one of them is a country where a wrong ' +\n      'number changes which continent someone moves to. Sourcing all of them properly is roughly a day of ' +\n      'work, and it is the next thing being done.</p></div></div>';\n  }\n  out+='<div class=\"panel\"><h3>Email me a country comparison</h3>'+\n    '<p>The routes, durations, work rights and switch paths for the countries you are weighing, '+\n    'side by side in one document. Everything above stays free either way.</p>'+\n    '<div id=\"gateVisa\"></div></div>';\n  out+='<div class=\"panel\"><h3>What this page cannot do</h3><p>It is a summary of published rules, not ' +\n    'immigration advice, and only the government body named on each source can tell you what applies to your ' +\n    'case. Rules also differ by campus: a school with campuses in three countries puts you under three ' +\n    'different regimes, and that is a bigger decision than the brochure makes it look.</p>' +\n    '<a class=\"btn\" href=\"https://involve-consulting.com/contact-us/?utm_source=tools&amp;utm_medium=visa&amp;utm_campaign=in-tool-cta\">Talk it through with someone</a></div>';\n  document.getElementById('vstatic').innerHTML=out;\n  if(window.involveGate) window.involveGate(document.getElementById('gateVisa'),{\n    tool:'visa', cta:'Email me the comparison',\n    payload:function(){return {sourced:ok.map(function(r){return r.code;}), viewing:sel.value, nationality:natCode()};}\n  });\n})();\n"}};
+var VIEWS = {"visa": {"title": "Visa and post-study work rights", "html": "<div data-view=\"visa\"><div class=\"toolbar-strip\"><div class=\"wrap\"><span class=\"stamp is-unsourced\" id=\"vStamp\">Needs data</span>\n<span id=\"vNote\"></span></div></div><main class=\"wrap\">\n<div class=\"tool-head\">\n  <h1>Visa and post-study work rights</h1>\n  <p class=\"lede\">How long each country lets you stay after you graduate, what you can do during that\n  window, and what you have to switch onto afterwards &mdash; answered for the passport you actually\n  hold, not for a generic international student. This is the fact that should decide your country,\n  and it is the one most often quoted out of date.</p>\n</div>\n<div class=\"panel\" style=\"border-color:var(--ink)\">\n  <h3>Why this page is dated on every line</h3>\n  <p>Immigration rules change on political timelines, not academic ones. A visa page without a date\n  on it is worse than no page, because a student reads it, picks a country, and finds out eighteen\n  months later.</p>\n  <p style=\"margin-bottom:0\">The UK is the live example. Almost every study-abroad site still\n  advertises two years of post-study work there. That is about to stop being true, and the date it\n  stops falls in the middle of this application cycle.</p>\n</div>\n<div class=\"panel\">\n  <div class=\"qgrid\">\n    <div>\n      <label for=\"vNat\">What passport do you hold?</label>\n      <select id=\"vNat\"></select>\n      <span class=\"qhint\">An EU passport removes the permit entirely in several of these countries.\n      An Indian one adds a year in Australia and a second year in France.</span>\n    </div>\n    <div>\n      <label for=\"vSel\">Which country are you looking at?</label>\n      <select id=\"vSel\"></select>\n    </div>\n    <div>\n      <label for=\"vLevel\">What level is the qualification?</label>\n      <select id=\"vLevel\">\n        <option value=\"masters\">Master&rsquo;s (including MBA, MiM, MSc)</option>\n        <option value=\"bachelors\">Bachelor&rsquo;s</option>\n        <option value=\"phd\">Doctorate / PhD</option>\n      </select>\n      <span class=\"qhint\">France will not issue its job-search card below master grade. A doctorate\n      is worth a third year in the UK and Australia.</span>\n    </div>\n    <div>\n      <label for=\"vWhere\">Where will you have studied?</label>\n      <select id=\"vWhere\">\n        <option value=\"in\">In the country I am asking about</option>\n        <option value=\"out\">Somewhere else</option>\n      </select>\n      <span class=\"qhint\">Most of these routes exist only for graduates of that country&rsquo;s own\n      institutions. Two do the opposite: the UK&rsquo;s High Potential Individual visa is only for\n      degrees earned OUTSIDE the UK.</span>\n    </div>\n    <div>\n      <label for=\"vList\">Is the institution on that country&rsquo;s approved or ranked list?</label>\n      <select id=\"vList\">\n        <option value=\"unsure\">I am not sure</option>\n        <option value=\"yes\">Yes</option>\n        <option value=\"no\">No</option>\n      </select>\n      <span class=\"qhint\">Several countries gate the route on a named published list rather than on\n      reputation: an approved provider register, or a global ranking position. Which list applies is\n      named in the result.</span>\n    </div>\n    <div>\n      <label for=\"vStem\">Is the programme STEM-designated in the United States?</label>\n      <select id=\"vStem\">\n        <option value=\"unsure\">I am not sure</option>\n        <option value=\"yes\">Yes</option>\n        <option value=\"no\">No</option>\n      </select>\n      <span class=\"qhint\">This is decided by the six-digit CIP code your programme is registered\n      under, not by whether it feels technical. A standard MBA (52.0201) is not on the list. It is\n      the difference between 12 months and 36 in the United States, and it changes nothing anywhere\n      else.</span>\n    </div>\n  </div>\n  <p class=\"hint\" style=\"margin-bottom:0\">Nationality changes the answer more than most sites admit.\n  An EU passport means several of these countries need no post-study permit at all. An Indian\n  passport is worth an extra year in Australia and a decade in the American green card queue.\n  The default is India because that is who asks most often; change it and every card below changes\n  with it. One country at a time, because reading all sixteen end to end is thirty screens on a\n  phone, which is how people miss the one they came for.</p>\n</div>\n<div id=\"vout\"></div>\n<div id=\"vstatic\"></div>\n</main></div>", "js": "\n(function(){\n  var C=window.INVOLVE_COUNTRIES||[], ok=C.filter(function(c){return c.status==='verified';});\n  var NATS=(window.INVOLVE_NATIONALITIES||[]).slice().sort(function(a,b){\n    return a.name<b.name?-1:a.name>b.name?1:0;});\n  var NRULES=window.INVOLVE_NATIONALITY_RULES||[];\n  var DEFAULT_NAT='IN';\n\n  function esc(s){return String(s).replace(/[&<>\"]/g,function(ch){\n    return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[ch];});}\n\n  /* The header used to say \"16 of 16 countries sourced\" while Germany carried\n     source_url: null and three records were flagged as not yet confirmed against\n     the authority's own page. Count what is actually there. */\n  var sourced=ok.filter(function(r){return r.source_url&&String(r.source_url).trim();});\n  var pending=ok.filter(function(r){return r.needs_official_confirmation;});\n  var unlinked=ok.filter(function(r){return !(r.source_url&&String(r.source_url).trim());});\n  var note=sourced.length+' of '+C.length+' countries carry a link to the page the figures were read from.';\n  if(unlinked.length) note+=' '+unlinked.map(function(r){return r.name;}).join(', ')+\n    (unlinked.length===1?' has no source link at all.':' have no source link at all.');\n  if(pending.length) note+=' '+pending.length+' record'+(pending.length===1?' is':'s are')+\n    ' not yet confirmed against the government\u2019s own page ('+\n    pending.map(function(r){return r.name;}).join(', ')+').';\n  note+=' '+NRULES.length+' nationality-specific rules across '+\n    Object.keys(NRULES.reduce(function(a,r){a[r.country]=1;return a;},{})).length+\n    ' of them, for '+NATS.length+' nationalities.'+\n    ' Fields the authority does not publish are left blank, not guessed.';\n  document.getElementById('vNote').textContent=note;\n  var s=document.getElementById('vStamp');\n  if(sourced.length===C.length&&!pending.length){s.className='stamp is-ready';s.textContent='Ready';}\n  else {s.className='stamp is-pending';s.textContent='Partial';}\n\n  var ROUTES=window.INVOLVE_ROUTES||[];\n\n  /* ------------------------------------------------------------------\n     THE ROUTE ENGINE.\n\n     The old tool printed one number per country. That number was wrong\n     for most people, because none of these routes is a single number:\n     France will not issue below master grade, the United States gives 12\n     months or 36 depending on a six-digit CIP code, the UK gives three\n     years for a doctorate, the Netherlands applies a two-ranking test to\n     a degree earned abroad and none at all to a Dutch one, and Australia\n     adds a year for an Indian passport.\n\n     data/routes.js holds 26 sourced routes with their conditions.\n     `requires` is read as: every key PRESENT must be satisfied; a key\n     that is absent is not a condition. That distinction carries real\n     weight - uk-graduate requires the degree to be British and uk-hpi\n     requires it NOT to be, and the second is expressed by the absence of\n     the key plus a note, not by a negation.\n\n     Three outcomes, not two. \"no\" is a condition the answers fail\n     outright. \"maybe\" is a condition that depends on something the\n     visitor said they were not sure about. Collapsing \"maybe\" into\n     either of the others is how a tool ends up telling somebody they\n     have no route when they have one.\n     ------------------------------------------------------------------ */\n  var LEVEL_RANK={bachelors:1,masters:2,phd:3};\n\n  function evalRoute(r,a){\n    var q=r.requires||{}, maybe=false;\n    if(q.level_min && (LEVEL_RANK[a.level]||0) < (LEVEL_RANK[q.level_min]||0)) return 'no';\n    if(q.level_exact && a.level!==q.level_exact) return 'no';\n    if(q.degree_from_destination===true && a.where!=='in') return 'no';\n    /* The HPI case: no degree_from_destination key, and the source says a UK\n       degree is NOT eligible. Expressed here rather than in the schema. */\n    if(r.id==='uk-hpi' && a.where==='in') return 'no';\n    if(q.nationality_in && q.nationality_in.indexOf(a.nat)===-1) return 'no';\n    if(q.stem_designated===true){\n      if(a.stem==='no') return 'no';\n      if(a.stem!=='yes') maybe=true;\n    }\n    if(q.institution_on_list){\n      if(a.list==='no') return 'no';\n      if(a.list!=='yes') maybe=true;\n    }\n    /* Conditions we cannot ask about without turning this into a form nobody\n       finishes. They are surfaced as text instead of silently assumed. */\n    if(q.institution_recognised===true) { /* asked as part of the list question */ }\n    if(q.min_programme_months || q.field_linked_to_shortage ||\n       q.max_years_since_graduation || q.apply_from_inside) maybe=maybe||false;\n    return maybe?'maybe':'yes';\n  }\n\n  function monthsFor(r,a){\n    var by=r.yields&&r.yields.by_level;\n    if(by && by[a.level]!=null) return by[a.level];\n    return r.duration_months;\n  }\n  /* The STEM extension is 24 months ON TOP of the 12, not instead of it.\n     Printing 24 next to the United States would be worse than printing 12. */\n  var STACKS={'us-stem-opt-extension':'us-opt-post-completion'};\n\n  function totalFor(r,a,pool){\n    var m=monthsFor(r,a);\n    var base=STACKS[r.id];\n    if(base){\n      var b=pool.filter(function(x){return x.r.id===base;})[0];\n      if(b && m!=null && monthsFor(b.r,a)!=null) return m + monthsFor(b.r,a);\n    }\n    if(r.renewable_to_months!=null) return r.renewable_to_months;\n    return m;\n  }\n\n  function routesFor(country,a){\n    var pool=ROUTES.filter(function(r){return r.country===country;})\n                   .map(function(r){return {r:r, verdict:evalRoute(r,a)};});\n    pool.forEach(function(x){ x.months = totalFor(x.r,a,pool); x.first = monthsFor(x.r,a); });\n    var rank={yes:0,maybe:1,no:2};\n    pool.sort(function(x,y){\n      if(rank[x.verdict]!==rank[y.verdict]) return rank[x.verdict]-rank[y.verdict];\n      return (y.months==null?-1:y.months) - (x.months==null?-1:x.months);\n    });\n    return pool;\n  }\n\n  var KIND_WORDS={open_work:'You may work outright for the whole period.',\n    job_search:'You may look for work. You must switch to a work permit once you are hired.',\n    no_work:'You may look for work but you may NOT work on it.'};\n\n  var LEVELS=[['bachelors','bachelor\u2019s'],['masters','master\u2019s'],['phd','doctoral']];\n  var MAXWORDS=/\\b(up to|capped by|depends on|depending on|maximum|no more than)\\b/i;\n  var MONTHS=['January','February','March','April','May','June','July','August','September',\n    'October','November','December'];\n\n  function longDate(iso){\n    var p=String(iso).split('-');\n    if(p.length!==3) return iso;\n    return String(Number(p[2]))+' '+MONTHS[Number(p[1])-1]+' '+p[0];\n  }\n\n  function firstSentence(t){\n    var s=String(t||'').split(/\\.\\s/)[0];\n    return s?(/[.!?]$/.test(s)?s:s+'.'):'';\n  }\n\n  function byLevelText(r){\n    var lv=r.duration_by_level;\n    if(!lv) return null;\n    var parts=[],distinct={};\n    for(var i=0;i<LEVELS.length;i++){\n      var v=lv[LEVELS[i][0]];\n      parts.push(LEVELS[i][1]+' '+(v==null?'not published':v+' months'));\n      distinct[String(v)]=1;\n    }\n    // Nothing to add when every level is the headline figure.\n    if(Object.keys(distinct).length===1&&String(r.duration_months)===Object.keys(distinct)[0]) return null;\n    return parts.join(' \u00b7 ');\n  }\n\n  /* Canada and New Zealand publish a CEILING; Australia's figure is a FLOOR.\n     Rendering both as a bare number made the comparison read backwards, so the\n     qualifier goes in the metric row itself, with the condition attached. */\n  function durationCell(r){\n    if(r.duration_months==null){\n      return '<span class=\"v wrapcell\">not published'+\n        '<span class=\"cell-note\">'+esc(firstSentence(r.duration_note))+'</span></span>';\n    }\n    var lv=r.duration_by_level||{};\n    var vals=[lv.bachelors,lv.masters,lv.phd].filter(function(v){return v!=null;});\n    var lvMax=vals.length?Math.max.apply(null,vals):null;\n    var first=firstSentence(r.duration_note);\n    var isMax=MAXWORDS.test(first);\n    var isFloor=!isMax&&lvMax!=null&&lvMax>r.duration_months;\n\n    var qual='', cond='';\n    if(isMax){\n      qual='<span class=\"dur-qual\">maximum, not guaranteed</span>';\n      cond=first;\n    } else if(isFloor){\n      qual='<span class=\"dur-qual\">guaranteed floor \u2014 more at some levels</span>';\n      cond=byLevelText(r)||first;\n    }\n    var extra='';\n    if(r.duration_months_from&&r.duration_months_from.months!=null){\n      extra='<span class=\"cell-note\">'+r.duration_months_from.months+' months for applications from '+\n        esc(longDate(r.duration_months_from.date))+'.</span>';\n    }\n    return '<span class=\"v wrapcell\">'+r.duration_months+' months'+qual+\n      (cond?'<span class=\"cell-note\">'+esc(cond)+'</span>':'')+extra+'</span>';\n  }\n\n  function money(n){\n    var s=String(n).split('.');\n    s[0]=s[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g,',');\n    return s.join('.');\n  }\n\n  function salaryCell(t){\n    if(!t) return null;\n    var head;\n    if(t.amount==null){\n      head='not published';\n    } else {\n      head=t.currency+' '+money(t.amount)+' a '+(t.period||'year')+(t.year?' ('+t.year+')':'');\n    }\n    return '<span class=\"v wrapcell\">'+esc(head)+\n      (t.note?'<span class=\"cell-note\">'+esc(t.note)+'</span>':'')+'</span>';\n  }\n\n  function prCell(r){\n    var head;\n    if(r.leads_to_pr===true) head='Yes'+(r.pr_after_years!=null?', after '+r.pr_after_years+\n      ' year'+(r.pr_after_years===1?'':'s'):'');\n    else if(r.leads_to_pr===false) head='No';\n    else head='not stated on the pages checked';\n    return '<span class=\"v wrapcell\">'+esc(head)+\n      (r.pr_note?'<span class=\"cell-note\">'+esc(r.pr_note)+'</span>':'')+'</span>';\n  }\n\n  function plainRow(k,v){\n    return '<div class=\"metric-row\"><span class=\"k\">'+k+'</span><span class=\"v wrapcell\">'+\n      esc(v)+'</span></div>';\n  }\n\n  /* ------------------------------------------------------------------\n     NATIONALITY MATCHING.\n\n     data/nationality.js is deliberately small: 27 sourced rules, not one\n     per (country, nationality) pair. Roughly two thirds of pairs match\n     nothing, and its header is explicit that the correct output there is\n     to SAY SO rather than to invent a difference. This function returns\n     the rules that actually apply and nothing else; the caller prints the\n     honest sentence when the list comes back empty.\n     ------------------------------------------------------------------ */\n  var NAT_BY_CODE={};\n  for(var ni=0;ni<NATS.length;ni++) NAT_BY_CODE[NATS[ni].code]=NATS[ni];\n\n  function natGroups(code){\n    var n=NAT_BY_CODE[code];\n    return (n&&n.groups)||[];\n  }\n  function ruleApplies(rule,code){\n    var a=rule.applies_to||{}, g=natGroups(code), i;\n    if(a.nationalities) return a.nationalities.indexOf(code)!==-1;\n    if(a.groups){\n      for(i=0;i<a.groups.length;i++) if(g.indexOf(a.groups[i])!==-1) return true;\n      return false;\n    }\n    if(a.all_except_groups){\n      for(i=0;i<a.all_except_groups.length;i++) if(g.indexOf(a.all_except_groups[i])!==-1) return false;\n      return true;\n    }\n    return false;   /* a rule that targets nobody matches nobody */\n  }\n  /* not_required first: it is the one kind that makes everything above it\n     on the card irrelevant, so burying it under three paragraphs of a route\n     the reader does not need would be the worst ordering available. */\n  var KIND_ORDER={not_required:0,restriction:1,advantage:2,alternative_route:3,watch_out:4,\n    no_difference:5};\n  var KIND_LABEL={not_required:'You do not need this route',restriction:'Harder for you',\n    advantage:'Better for you',alternative_route:'Another route open to you',\n    watch_out:'Watch out',no_difference:'Your passport makes no difference here'};\n\n  function rulesFor(country,code){\n    return NRULES.filter(function(r){return r.country===country&&ruleApplies(r,code);})\n      .sort(function(a,b){return (KIND_ORDER[a.kind]||9)-(KIND_ORDER[b.kind]||9);});\n  }\n\n  /* A national of the destination does not need a post-study work route into\n     their own country. This is not in data/nationality.js and should not be:\n     it is definitional, not something read off a government page, and filing\n     sixteen sourceless records to express it would be worse than saying it\n     here. Without it the tool told a British graduate in the UK to apply for\n     the Graduate visa, and a Singaporean in Singapore that COMPASS would score\n     their passport. */\n  /* countries.js uses 'UK'; ISO, and therefore the nationality list, uses 'GB'.\n     Without this a British graduate in the UK matched nothing and was shown the\n     Graduate visa as though they needed it. */\n  var CODE_ALIAS={GB:'UK',UK:'GB'};\n  function sameCountry(cc,nc){ return cc===nc||CODE_ALIAS[nc]===cc; }\n  function ownCountry(r,code){\n    if(!sameCountry(r.code,code)) return null;\n    var nat=NAT_BY_CODE[code];\n    return '<div class=\"r\"><span class=\"natkind k-not_required\">This is your own country</span>'+\n      '<h4>None of this applies to you.</h4>'+\n      '<p>You are a national of '+esc(r.name)+', so there is no post-study work route for you to '+\n      'apply for and nothing on this card is a permission you need. It is here because you may be '+\n      'weighing '+esc(r.name)+' against somewhere you would need one. Pick another country above '+\n      'and the card will tell you what you would face there.</p></div>';\n  }\n\n  function ruleHtml(r){\n    var srcs=(r.source_urls||[]).filter(function(u){return u&&u!==r.source_url;});\n    return '<div class=\"r\"><span class=\"natkind k-'+esc(r.kind)+'\">'+\n      esc(KIND_LABEL[r.kind]||r.kind)+'</span>'+\n      '<h4>'+esc(r.headline)+'</h4>'+\n      '<p>'+esc(r.detail)+'</p>'+\n      '<p class=\"src\">'+esc(r.source||'')+\n      (r.source_url?'. <a href=\"'+esc(r.source_url)+'\" rel=\"noopener\">Source</a>':'')+\n      (srcs.length?', '+srcs.map(function(u,i){\n        return '<a href=\"'+esc(u)+'\" rel=\"noopener\">source '+(i+2)+'</a>';}).join(', '):'')+\n      '. Checked '+esc(r.checked_on||'')+\n      (r.source_type==='official'?'':' \\u2014 government agency, not a government domain')+\n      '.</p></div>';\n  }\n\n  function natBlock(r,code){\n    var nat=NAT_BY_CODE[code], dem=(nat&&(nat.demonym||nat.name))||'your';\n    var rules=rulesFor(r.code,code), own=ownCountry(r,code);\n    var head='<div class=\"natblock\"><h4 style=\"font-size:1rem;margin-bottom:9px\">'+\n      'On '+esc(dem==='your'?'your':dem)+' passport</h4>';\n    if(own) return head+own+rules.map(ruleHtml).join('')+'</div>';\n    if(!rules.length){\n      /* The sentence nationality.js instructs a renderer to print. It is true\n         for about two thirds of pairs and it is the right answer for them. */\n      return head+'<p class=\"natnone\">No nationality-specific rule was found for '+\n        esc((nat&&nat.name)||'your nationality')+' in '+esc(r.name)+\n        '. The general rules above apply to you as they are written.</p></div>';\n    }\n    return head+rules.map(ruleHtml).join('')+'</div>';\n  }\n\n  /* ---------------- THE OPEN ANSWER ----------------\n     One number, the route it comes from, and the link to the page it was read\n     off. The number is free and it is checkable: gating the source as well\n     would make the headline unverifiable, which is the one thing this whole\n     project refuses to ship. Everything that turns the number into a plan is\n     behind the email. */\n  function headline(r,a){\n    var pool=routesFor(r.code,a);\n    var best=pool.filter(function(x){return x.verdict==='yes'&&x.months!=null;})[0];\n    var soft=pool.filter(function(x){return x.verdict==='maybe'&&x.months!=null;})[0];\n    var pick=best||soft;\n    var cls=best?'':(soft?' maybe':' nope');\n\n    if(!pick){\n      var blocked=pool.filter(function(x){return x.verdict==='no';});\n      var unpub=pool.filter(function(x){return x.verdict!=='no'&&x.months==null;})[0];\n      if(unpub){\n        return '<div class=\"headline maybe\"><span class=\"big\">Not published</span>'+\n          '<span class=\"cap\">as a fixed number of months</span>'+\n          '<span class=\"via\">'+esc(unpub.r.label)+' &mdash; '+esc(r.name)+' does not publish one '+\n          'figure for this. The length is worked out from your programme, and the rules that decide '+\n          'it are in the full report.</span>'+\n          '<span class=\"src\"><a href=\"'+esc(unpub.r.source_url)+'\" rel=\"noopener\">'+\n          esc(unpub.r.source)+'</a> &middot; checked '+esc(unpub.r.checked_on)+'</span></div>';\n      }\n      return '<div class=\"headline nope\"><span class=\"big\">No route</span>'+\n        '<span class=\"cap\">on the answers you gave</span>'+\n        '<span class=\"via\">On what you have told us, none of the '+pool.length+' published route'+\n        (pool.length===1?'':'s')+' for '+esc(r.name)+' is open to you. That is usually one '+\n        'condition, and it is usually fixable &mdash; the full report names which one, for each '+\n        'route.</span></div>';\n    }\n\n    var yrs=pick.months/12, num;\n    if(pick.months%12===0) num=yrs+(yrs===1?' year':' years');\n    else num=pick.months+' months';\n\n    /* The base route's months, not this route's. The STEM extension is 24 on\n       top of 12; printing \"on top of the 24\" was reading the extension's own\n       figure back at itself. */\n    var stacked=STACKS[pick.r.id];\n    var via=esc(pick.r.label);\n    if(stacked){\n      var baseRow=pool.filter(function(x){return x.r.id===stacked;})[0];\n      if(baseRow) via+=' &mdash; '+monthsFor(pick.r,a)+' months on top of the '+\n        monthsFor(baseRow.r,a)+' you get first';\n    }\n    if(pick.r.renewable_to_months!=null && pick.r.duration_months!=null &&\n       pick.r.renewable_to_months>pick.r.duration_months)\n      via+=' &mdash; '+pick.r.duration_months+' months, renewable once';\n\n    return '<div class=\"headline'+cls+'\"><span class=\"big\">'+esc(num)+'</span>'+\n      '<span class=\"cap\">'+(best?'you would get':'you would probably get')+'</span>'+\n      '<span class=\"via\">'+via+'</span>'+\n      (soft&&!best?'<span class=\"via\" style=\"font-size:.86rem;color:var(--ink-faint)\">This one '+\n        'depends on an answer you marked &ldquo;not sure&rdquo;. Change it above and the number '+\n        'firms up.</span>':'')+\n      '<span class=\"src\"><a href=\"'+esc(pick.r.source_url)+'\" rel=\"noopener\">'+\n      esc(pick.r.source)+'</a> &middot; checked '+esc(pick.r.checked_on)+'</span></div>';\n  }\n\n  function card(r,natCode){\n    var out='<div class=\"panel\"><h3>'+esc(r.name)+'</h3>'+\n      plainRow('Route',r.route)+\n      '<div class=\"metric-row\"><span class=\"k\">How long you get</span>'+durationCell(r)+'</div>';\n\n    var bl=byLevelText(r);\n    if(bl) out+=plainRow('By level of study',bl);\n\n    out+=plainRow('Job offer needed to apply',r.job_offer_required?'Yes':'No')+\n      plainRow('What you can do',r.work_restrictions)+\n      plainRow('What you switch onto next',r.switch_route);\n\n    var sal=salaryCell(r.switch_salary_threshold);\n    if(sal) out+='<div class=\"metric-row\"><span class=\"k\">Salary you must be paid to switch</span>'+\n      sal+'</div>';\n\n    if(r.apply_deadline) out+=plainRow('When you have to apply',r.apply_deadline);\n    out+=plainRow('Known costs',r.known_costs||'not recorded');\n    out+='<div class=\"metric-row\"><span class=\"k\">Leads to permanent residence</span>'+prCell(r)+'</div>';\n\n    out+='<p class=\"hint\" style=\"margin-top:14px\">'+esc(r.duration_note)+'</p>';\n    if(r.watch_out) out+='<div class=\"flag\"><p><strong>Watch out.</strong> '+esc(r.watch_out)+'</p></div>';\n    if(r.india_watch_out&&natCode==='IN') out+='<div class=\"flag\"><p><strong>If you are applying '+\n      'from India.</strong> '+esc(r.india_watch_out)+'</p></div>';\n    out+=natBlock(r,natCode);\n\n    var extra=(r.source_urls||[]).filter(function(u){return u&&u!==r.source_url;});\n    out+='<div style=\"font-size:.78rem;color:var(--ink-faint);margin-top:14px;padding-top:11px;border-top:1px solid var(--rule)\">'+\n      esc(r.source)+(r.source_url?'. <a href=\"'+esc(r.source_url)+'\" rel=\"noopener\">Source</a>':'')+\n      '. Checked '+esc(r.checked_on)+'.'+\n      (r.needs_official_confirmation?' Not yet confirmed against the government\u2019s own page.':'')+\n      (extra.length?'<br>Also read: '+extra.map(function(u,i){\n        return '<a href=\"'+esc(u)+'\" rel=\"noopener\">source '+(i+2)+'</a>';}).join(', ')+'.':'')+\n      '</div></div>';\n    return out;\n  }\n\n  var sel=document.getElementById('vSel'), vout=document.getElementById('vout'),\n      natSel=document.getElementById('vNat'), lvlSel=document.getElementById('vLevel'),\n      whereSel=document.getElementById('vWhere'), listSel=document.getElementById('vList'),\n      stemSel=document.getElementById('vStem');\n  sel.innerHTML=ok.map(function(r){\n      return '<option value=\"'+esc(r.code)+'\">'+esc(r.name)+'</option>';}).join('')+\n    '<option value=\"__all\">All '+ok.length+' countries, one after another</option>';\n  natSel.innerHTML=NATS.map(function(n){\n      return '<option value=\"'+esc(n.code)+'\">'+esc(n.name)+'</option>';}).join('');\n\n  function natCode(){ return natSel.value||DEFAULT_NAT; }\n\n  function answers(){\n    return {nat:natCode(), level:lvlSel.value, where:whereSel.value,\n            list:listSel.value, stem:stemSel.value};\n  }\n\n  /* Unlocked for the session once the email is given. Held in a variable, not\n     in storage: it is the state of this visit, and writing it to the device\n     would be a second thing to explain in the privacy copy for no benefit. */\n  var unlocked=false;\n\n  function alternatives(r,a){\n    var pool=routesFor(r.code,a);\n    if(pool.length<2) return '';\n    var rows=pool.map(function(x){\n      var m = x.months==null ? 'not published' :\n              (x.months%12===0 ? (x.months/12)+(x.months===12?' year':' years') : x.months+' months');\n      var v = x.verdict==='yes' ? 'open to you'\n            : x.verdict==='maybe' ? 'depends on an answer you were unsure about'\n            : 'not open on your answers';\n      return '<div class=\"altline\"><span>'+esc(x.r.label)+' &mdash; <em style=\"font-style:normal;'+\n        'color:var(--ink-faint)\">'+v+'</em></span><b>'+esc(m)+'</b></div>';\n    }).join('');\n    return '<div class=\"panel\"><h3>Every published route into '+esc(r.name)+'</h3>'+rows+\n      '<p class=\"hint\" style=\"margin-top:14px;margin-bottom:0\">'+pool.length+' route'+\n      (pool.length===1?'':'s')+' on file for '+esc(r.name)+', each read off the authority&rsquo;s '+\n      'own page. What decides which one you are on is rarely the country &mdash; it is your level '+\n      'of study, where you studied, and whether your institution is on that country&rsquo;s list.</p></div>';\n  }\n\n  function lockedTeaser(r,a){\n    var pool=routesFor(r.code,a);\n    var best=pool.filter(function(x){return x.verdict!=='no';})[0]||pool[0];\n    var bits=['What you may actually do on it &mdash; work outright, or only look',\n      'Every condition attached to it, and which one you are closest to failing',\n      'What you have to switch onto once somebody hires you',\n      'The salary you must be paid to make that switch',\n      'When you have to apply, and what it costs',\n      'Whether it leads anywhere permanent',\n      'What your passport changes, on this route, in this country'];\n    if(pool.length>1) bits.push('The other '+(pool.length-1)+' route'+(pool.length===2?'':'s')+\n      ' into '+esc(r.name)+', and whether any is longer than the one above');\n    return '<div class=\"locked\"><h4>In the full report</h4><ul>'+\n      bits.map(function(b){return '<li>'+b+'</li>';}).join('')+'</ul>'+\n      '<p class=\"hint\" style=\"margin:14px 0 0\">The number above is yours to keep and the source is '+\n      'linked, so you can check it without giving us anything. The rest is the part a consultant '+\n      'would walk you through, and we send it in one email.</p>'+\n      '<div id=\"gateVisaFull\" style=\"margin-top:16px\"></div></div>';\n  }\n\n  function draw(){\n    var code=natCode(), a=answers();\n    if(sel.value==='__all'){\n      vout.innerHTML=ok.map(function(r){\n        return '<div class=\"panel\">'+headline(r,a)+'</div>'+(unlocked?card(r,code):'');\n      }).join('');\n      if(!unlocked) vout.innerHTML+=lockedTeaser(ok[0],a);\n    } else {\n      var r=ok.filter(function(x){return x.code===sel.value;})[0];\n      if(!r){ vout.innerHTML=''; return; }\n      vout.innerHTML='<div class=\"panel\">'+headline(r,a)+'</div>'+\n        (unlocked ? (alternatives(r,a)+card(r,code)) : lockedTeaser(r,a));\n    }\n    var mount=document.getElementById('gateVisaFull');\n    if(mount && window.involveGate) window.involveGate(mount,{\n      tool:'visa', cta:'Email me the full report',\n      payload:function(){var x=answers();\n        return {viewing:sel.value, nationality:x.nat, degree:x.level,\n                studiedIn:x.where, onList:x.list, stemDesignated:x.stem};},\n      onSent:function(res){ if(res && !res.suppressed){ unlocked=true; draw(); } }\n    });\n  }\n  [sel,natSel,lvlSel,whereSel,listSel,stemSel].forEach(function(el){\n    el.addEventListener('change',draw);});\n  if(ok.length) sel.value=ok[0].code;\n  if(NAT_BY_CODE[DEFAULT_NAT]) natSel.value=DEFAULT_NAT;\n  draw();\n\n  var out='';\n  var todo=C.filter(function(c){return c.status!=='verified';});\n  if(todo.length){\n    out+='<div class=\"panel\"><h3>Not sourced yet</h3><div class=\"empty\"><p>'+\n      todo.map(function(c){return esc(c.name);}).join(', ')+'.</p>'+\n      '<p style=\"margin-bottom:0\">These are blank on purpose. Every one of them is a country where a wrong ' +\n      'number changes which continent someone moves to. Sourcing all of them properly is roughly a day of ' +\n      'work, and it is the next thing being done.</p></div></div>';\n  }\n\n  out+='<div class=\"panel\"><h3>What this page cannot do</h3><p>It is a summary of published rules, not ' +\n    'immigration advice, and only the government body named on each source can tell you what applies to your ' +\n    'case. Rules also differ by campus: a school with campuses in three countries puts you under three ' +\n    'different regimes, and that is a bigger decision than the brochure makes it look.</p>' +\n    '<a class=\"btn\" href=\"https://involve-consulting.com/contact-us/?utm_source=tools&amp;utm_medium=visa&amp;utm_campaign=in-tool-cta\">Talk it through with someone</a></div>';\n  document.getElementById('vstatic').innerHTML=out;\n\n})();\n"}};
 /* Which view a bare URL, an unknown route or a stray in-page anchor lands on.
    'home' in the combined bundle. In a single-tool page there IS no home view,
    so the fallback is that tool: the page must never route to a view it does
