@@ -469,6 +469,14 @@ mark.hit.strong { background: #FBE9B8; }
    ------------------------------------------------------------------------ */
 html[data-embed="1"] .masthead,
 html[data-embed="1"] .site-foot{display:none !important}
+/* The host page already carries the tool's name and its description, in the
+   page heading a few inches above this frame. Printing them again inside the
+   frame is the single most obvious "this is two websites stapled together"
+   tell there is, so in embedded mode the tool starts at its controls. Opened
+   directly, the heading is still there and still needed. */
+html[data-embed="1"] .tool-head{display:none !important}
+html[data-embed="1"] #view > div > main > .panel:first-of-type,
+html[data-embed="1"] .toolbar-strip{margin-top:0}
 html[data-embed="1"],
 html[data-embed="1"] body{background:transparent;height:auto;min-height:0}
 html[data-embed="1"] #view{padding-top:0}
