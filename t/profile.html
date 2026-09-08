@@ -610,8 +610,24 @@ html[data-embed="1"] .site-foot{display:none !important}
    tell there is, so in embedded mode the tool starts at its controls. Opened
    directly, the heading is still there and still needed. */
 html[data-embed="1"] .tool-head{display:none !important}
-html[data-embed="1"] #view > div > main > .panel:first-of-type,
-html[data-embed="1"] .toolbar-strip{margin-top:0}
+
+/* ---- the data-coverage note goes last, not first -------------------------
+   Every tool opened with a grey "PARTIAL" badge and a paragraph about what is
+   missing from its data, before the visitor had seen what the tool does. It is
+   honest and it stays word for word - but as a greeting it tells someone the
+   thing is unfinished before they have any reason to care. The same sentence
+   at the foot reads as a footnote on the answer they just got, which is where
+   a caveat belongs and where it will actually be read.
+
+   Done with flex order rather than by moving the markup, so the note stays
+   immediately after the tool in the DOM for a screen reader and in the source
+   for anyone checking us. */
+#view > [data-view]{display:flex;flex-direction:column}
+#view > [data-view] > main{order:1}
+#view > [data-view] > .toolbar-strip{order:2;border-bottom:0;border-top:1px solid var(--rule);
+  background:transparent;margin-top:34px;padding:16px 0 4px;font-size:.8rem;color:var(--ink-faint)}
+#view > [data-view] > .toolbar-strip .wrap{align-items:flex-start}
+#view > [data-view] > .toolbar-strip .stamp{flex:none}
 html[data-embed="1"],
 html[data-embed="1"] body{background:transparent;height:auto;min-height:0}
 html[data-embed="1"] #view{padding-top:0}
