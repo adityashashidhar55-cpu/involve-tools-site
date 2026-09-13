@@ -512,13 +512,16 @@ html[data-embed="1"] .wrap{padding-left:0;padding-right:0}
   <div class="wrap">
     <div class="foot-cols"><div><h3>Your application</h3><ul><li><a href="profile.html">Profile evaluation report</a></li><li><a href="fit.html">School fit and gap report</a></li><li><a href="waiver.html">Do I qualify for a waiver?</a></li><li><a href="essay.html">Essay and SOP analyser</a></li><li><a href="brief.html">Recommender brief builder</a></li><li><a href="https://involveresume.com/">CV and resume</a></li><li>Essay prompt library <span class="stamp is-pending">In build</span></li></ul></div><div><h3>Paying for it</h3><ul><li><a href="money.html">When your money has to be there</a></li><li><a href="cost.html">True cost and payback</a></li><li><a href="https://scholarships.involve-consulting.com/">Scholarship search</a></li><li><a href="https://unclaimedgrant.com/check/">Grants beyond study</a></li><li>Education loan comparator <span class="stamp is-pending">In build</span></li></ul></div><div><h3>Living there</h3><ul><li><a href="visa.html">Visa and post-study work rights</a></li><li><a href="country.html">Which country actually suits you?</a></li><li><a href="housing.html">Housing finder</a></li><li><a href="visadocs.html">Visa document prep</a></li></ul></div><div><h3>Practice and deadlines</h3><ul><li><a href="open.html">Application deadlines by school</a></li><li><a href="interview.html">Interview practice room</a></li><li>Application rounds calendar <span class="stamp is-pending">In build</span></li><li>Scholarship deadline tracker <span class="stamp is-pending">In build</span></li><li>Score converter <span class="stamp is-pending">In build</span></li></ul></div></div>
     <p class="measure">Every tool here runs in your browser. Your essay, your salary figures and your
-    recordings are read and processed in this tab, and they stay in it unless you press one of three
+    recordings are read and processed in this tab, and they stay in it unless you press one of four
     buttons that tell you, before you press them, exactly what they send:
     the email forms, which send what you typed into them; the deep read on the essay page,
     which sends the draft you wrote;
-    and sending one interview take to a consultant for review, which sends that single recording and
-    no other. Each of those lists what it sends first, sends nothing until you ask, and says so in
-    plain words when the service behind it is not switched on. All three are connected today. What you type into an email form reaches our own server in Mumbai, which keeps your name, your address, the fields that form listed and the exact sentence you ticked, and which tells you on screen if it cannot yet send the email you asked for. The deep read sends the draft you wrote to that same server, which passes it to a language model only when one is configured and tells you on screen, in those words, when one is not. Sending a take for review uploads that one recording, and no other, to private storage, and gives you a reference you can use to have it deleted. None of them does anything until you press its own button. Nothing else leaves
+    sending one interview take to a consultant for review, which sends that single recording and
+    no other; and signing in to unlock the interview room, which sends your email address so we can
+    email you a link and then asks which schools that address has unlocked — your recording, your
+    CV and your transcript are not part of it.
+    Each of those lists what it sends first, sends nothing until you ask, and says so in
+    plain words when the service behind it is not switched on. All four are connected today. What you type into an email form reaches our own server in Mumbai, which keeps your name, your address, the fields that form listed and the exact sentence you ticked, and which tells you on screen if it cannot yet send the email you asked for. The deep read sends the draft you wrote to that same server, which passes it to a language model only when one is configured and tells you on screen, in those words, when one is not. Sending a take for review uploads that one recording, and no other, to private storage, and gives you a reference you can use to have it deleted. Signing in sends your email address so we can email you a link, and afterwards asks that same server which schools you have unlocked; your recordings, your CV and your transcript are not part of that and never leave the tab. None of them does anything until you press its own button. Nothing else leaves
     this tab.
     The one thing this page fetches is Plausible Analytics: a cookieless counter that records page views and five events — the home page being opened, a tool being opened, a tool producing a result, a click on a link to us and an email form being submitted. It sets no cookies, stores nothing on your device, follows you nowhere else, and holds no identifier for you, so we can see that a tool was finished and not who finished it. Never a figure, a word or a file you entered. No fonts, no trackers, no advertising pixels, no images
     loaded from elsewhere: the typefaces and the mark are inside this page, and the build refuses to
@@ -4086,6 +4089,9 @@ window.INVOLVE_ROUTES = [
 ];
 
 window.INVOLVE_REQUIREMENTS = {};
+window.INVOLVE_IV_LANG = {};
+window.INVOLVE_IV_WORDCHARS = "";
+window.INVOLVE_IV_ANALYSE = null;
 </script>
 <script>
 /* ---- backend configuration -------------------------------------
@@ -4129,6 +4135,12 @@ window.INVOLVE_CONFIG = {
      price MUST print `label`, `cta` and `note` instead of a number, a blank or
      a guess. There is no other copy of this figure anywhere. */
   VIDEO_REVIEW_PRICE: {"set": false, "prices": null, "label": "Price being confirmed", "cta": "Register your interest in a human review", "note": "The price for a human review of one take is being agreed with the Involve team and is not set yet. Tell us you want one and we will come back to you with the price and a date before anything is recorded, uploaded or charged."},
+  /* The interview room's paid unlock, and the project's auth host. Sign-in is
+     a link to your own inbox; what has been paid for is attached to that
+     address rather than to this device. */
+  ACCESS_ENDPOINT: "https://aojnpekquzpwitkyhaai.supabase.co/functions/v1/access",
+  INTERVIEW_UNLOCK_PRICE: {"amount": 20, "currency": "EUR", "display": "\u20ac20"},
+  AUTH_URL: "https://aojnpekquzpwitkyhaai.supabase.co",
   ANALYTICS: {"provider": "Plausible Analytics", "domain": "tools.involve-consulting.com", "src": "https://plausible.io/js/script.js", "policy": "https://plausible.io/privacy-focused-web-analytics"}
 };
 
@@ -4232,6 +4244,113 @@ window.involveAI = function (payload) {
    rather than fetch for one reason: fetch has no upload progress event, and a
    sixty-megabyte upload behind a silent button is indistinguishable from a
    hang. */
+/* ---------------------------------------------------------------------------
+   THE INTERVIEW ROOM'S PAID UNLOCK.
+   One school, one payment, no subscription. Three things live here rather than
+   in the tool, for two reasons: a tool's own JavaScript is not allowed to reach
+   the network anywhere on this site, and an entitlement a browser could write
+   for itself is not an entitlement.
+
+     * SIGN-IN IS A LINK TO YOUR OWN INBOX. No password to invent and none for
+       us to lose. The only thing sent is the address.
+     * WHAT YOU HAVE PAID FOR IS HELD ON THE SERVER, against that address. The
+       browser holds a session token and nothing else, so the same unlock works
+       on your phone.
+     * THE CHECKOUT LINK COMES FROM THE SERVER TOO, per school. Until the owner
+       has put one there the function says so and the room says so in those
+       words, rather than showing a Pay button that cannot take money.
+
+   Every call is a no-op that resolves honestly when ACCESS_ENDPOINT is null, so
+   the room stays open rather than locking people out of something nobody can
+   currently buy.                                                              */
+var INVOLVE_SESSION_KEY = 'involve.session.v1';
+function involveSession(v) {
+  try {
+    if (v === undefined) return JSON.parse(localStorage.getItem(INVOLVE_SESSION_KEY) || 'null');
+    if (v === null) localStorage.removeItem(INVOLVE_SESSION_KEY);
+    else localStorage.setItem(INVOLVE_SESSION_KEY, JSON.stringify(v));
+  } catch (e) { return null; }
+  return v;
+}
+
+/* The magic link comes back with the tokens in the URL fragment, and this site
+   routes on the fragment - so they have to be read and stripped BEFORE the
+   router looks at it, or the reader lands on a route called
+   "access_token=ey..." and the token sits in their history and in any
+   screenshot they take. */
+(function readMagicLink() {
+  try {
+    var h = location.hash || '';
+    if (h.indexOf('access_token=') === -1) return;
+    var p = {};
+    h.replace(/^#/, '').split('&').forEach(function (kv) {
+      var i = kv.indexOf('=');
+      if (i > 0) p[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1));
+    });
+    if (p.access_token) involveSession({ access_token: p.access_token,
+                                         refresh_token: p.refresh_token || '' });
+    var route = (location.pathname.indexOf('/t/') > -1) ? '' : '#/interview';
+    history.replaceState(null, '', location.pathname + location.search + route);
+  } catch (e) { /* a failed read must never stop the page loading */ }
+})();
+
+window.involveAccess = function (op, arg) {
+  var cfg = window.INVOLVE_CONFIG || {};
+  if (!cfg.ACCESS_ENDPOINT) return Promise.reject({ notWired: true });
+  var s = involveSession();
+  return fetch(cfg.ACCESS_ENDPOINT, {
+    method: 'POST',
+    headers: (function () {
+      var h = { 'content-type': 'application/json' };
+      if (s && s.access_token) h.authorization = 'Bearer ' + s.access_token;
+      return h;
+    })(),
+    body: JSON.stringify({ op: op, arg: arg || null })
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (r.status === 401) { involveSession(null); return { signedIn: false, configured: true }; }
+      if (!r.ok) throw { status: r.status, message: j.detail || j.error || 'That did not work.' };
+      return j;
+    });
+  }).catch(function (e) {
+    if (e && (e.status || e.notWired)) throw e;
+    throw { message: 'Could not reach the server. Nothing was changed.' };
+  });
+};
+
+window.involveAccess.state = function () {
+  var cfg = window.INVOLVE_CONFIG || {};
+  if (!cfg.ACCESS_ENDPOINT) return Promise.resolve({ configured: false, signedIn: false, entitlements: [] });
+  return window.involveAccess('state').catch(function () {
+    return { configured: false, signedIn: false, entitlements: [] };
+  });
+};
+
+window.involveAccess.signIn = function (email) {
+  var cfg = window.INVOLVE_CONFIG || {};
+  if (!cfg.AUTH_URL) return Promise.resolve({ sent: false, message: 'Sign-in is not connected yet.' });
+  return fetch(cfg.AUTH_URL + '/auth/v1/otp', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', apikey: cfg.AI_PUBLISHABLE_KEY },
+    body: JSON.stringify({ email: email, create_user: true,
+                           options: { email_redirect_to: location.href.split('#')[0] } })
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      return r.ok ? { sent: true }
+                  : { sent: false, message: j.msg || j.error_description || j.message ||
+                      'That did not send.' };
+    });
+  }).catch(function () { return { sent: false, message: 'Could not reach the sign-in server.' }; });
+};
+
+window.involveAccess.signOut = function () { involveSession(null); return Promise.resolve({ signedIn: false }); };
+
+window.involveAccess.checkoutUrl = function (sku) {
+  return window.involveAccess('checkout', { sku: sku }).catch(function (e) {
+    return { url: null, message: (e && e.message) || 'Checkout could not be opened.' };
+  });
+};
+
 window.involveVideoReview = function (payload, blob, onProgress) {
   var cfg = window.INVOLVE_CONFIG || {};
   if (!cfg.VIDEO_REVIEW_ENDPOINT) return Promise.reject({ notWired: true });
