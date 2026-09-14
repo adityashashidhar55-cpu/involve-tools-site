@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Control room — Involve Consulting</title>
+<style>
+  /* Chart colours are the validated categorical palette, by role. Light and
+     dark are both SELECTED steps of the same hues, each validated against its
+     own surface - not an automatic flip. Aqua sits under 3:1 on the light
+     surface, so every chart that uses it ships direct labels and a table. */
+  .viz-root{
+    color-scheme:light;
+    --surface-1:#fcfcfb; --text-primary:#0b0b0b; --text-secondary:#52514e;
+    --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])) .viz-root{
+      color-scheme:dark;
+      --surface-1:#1a1a19; --text-primary:#ffffff; --text-secondary:#c3c2b7;
+      --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+    }
+  }
+  :root[data-theme="dark"] .viz-root{
+    color-scheme:dark;
+    --surface-1:#1a1a19; --text-primary:#ffffff; --text-secondary:#c3c2b7;
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+  }
+
+  :root{--brand:#58868C;--brand-dark:#3F686D;--gold:#EBB305;--paper:#fff;--sunk:#F4F6F6;
+        --ink:#1A1A1A;--mid:#55605F;--faint:#646E6D;--rule:#E2E7E7;--rule2:#C6D0D0;--r:3px;
+        --sans:'Montserrat',Helvetica,Arial,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--sunk);color:var(--ink);font:15px/1.6 var(--sans)}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 20px 90px}
+  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:4px}
+  h1{font-size:1.55rem;margin:0}
+  .sub{color:var(--faint);font-size:.88rem;margin:0 0 20px}
+  .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:20px 22px;margin-bottom:16px}
+  h2{font-size:.76rem;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin:0 0 14px;font-weight:700}
+  label{display:block;font-size:.85rem;font-weight:600;margin-bottom:6px}
+  input[type=password]{width:100%;max-width:460px;padding:9px 11px;border:1px solid var(--rule2);
+        border-radius:var(--r);font-family:var(--mono);font-size:.86rem}
+  .btn{background:var(--brand);color:#fff;border:0;border-radius:var(--r);padding:9px 18px;
+       font:inherit;font-size:.9rem;font-weight:600;cursor:pointer}
+  .btn:hover{background:var(--brand-dark)}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--rule2)}
+  .btn.ghost[aria-pressed="true"]{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .msg{padding:10px 13px;border-radius:var(--r);background:#FDF4DC;border:1px solid var(--gold);font-size:.88rem;margin-top:12px}
+  .msg.bad{background:#FBECEA;border-color:#C0392B}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule)}
+  .tile{background:var(--paper);padding:16px 18px}
+  .tile b{display:block;font-family:var(--mono);font-size:1.85rem;font-weight:500;line-height:1.15}
+  .tile span{font-size:.74rem;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  .tile small{display:block;font-size:.76rem;color:var(--mid);margin-top:3px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);background:var(--sunk)}
+  td.num,td.mono{font-family:var(--mono);font-size:.8rem;white-space:nowrap}
+  td.num{text-align:right}
+  .tag{display:inline-block;font-family:var(--mono);font-size:.7rem;padding:2px 7px;border-radius:10px;
+       background:var(--sunk);border:1px solid var(--rule2);color:var(--mid);margin:1px 3px 1px 0}
+  .yes{color:var(--brand-dark);font-weight:600}.no{color:var(--faint)}
+  .scroll{overflow-x:auto}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.8rem;color:var(--text-secondary);margin-bottom:10px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:0}
+  .foot{font-size:.82rem;color:var(--faint);line-height:1.6;max-width:76ch}
+  .bar-row{display:grid;grid-template-columns:1fr 60px;gap:10px;align-items:center;margin-bottom:7px;font-size:.84rem}
+  .bar-track{background:var(--sunk);border-radius:2px;height:20px;position:relative;overflow:hidden}
+  .bar-fill{height:100%;border-radius:0 2px 2px 0;background:var(--series-1)}
+  .bar-lab{position:absolute;left:8px;top:0;line-height:20px;font-size:.78rem;color:var(--text-primary);
+           white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 16px)}
+  .empty{font-size:.85rem;color:var(--faint);padding:10px 0}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  .gline{stroke:var(--rule);stroke-width:1}
+  .axis{font-size:10px;fill:var(--text-secondary);font-family:var(--mono)}
+  .dot-hit{cursor:pointer}
+  #tip{position:fixed;pointer-events:none;background:#14213A;color:#fff;font-size:.78rem;
+       padding:7px 10px;border-radius:3px;opacity:0;transition:opacity .1s;z-index:20;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap viz-root">
+
+  <header><h1>Control room</h1>
+    <span class="sub" id="stamp"></span></header>
+  <p class="sub">Everything the portal records, in one place: the main site, the scholarships site
+  and every tool. Counted first-party, cookieless, on our own server — nobody else sees it.</p>
+
+  <div class="card" id="auth">
+    <label for="key">Admin key</label>
+    <input type="password" id="key" autocomplete="off" spellcheck="false" placeholder="ivk_…">
+    <p class="foot" style="margin:8px 0 14px">Paste it once; this browser remembers it. It is sent in
+    a header, never in the address bar, so it cannot end up in your history or in a screenshot of a
+    URL. Treat it like a password — ask and I will issue a new one and kill the old.</p>
+    <button class="btn" id="go">Open</button>
+    <div id="authMsg"></div>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="row" role="group" aria-label="Date range">
+          <button class="btn ghost range" data-days="7">7 days</button>
+          <button class="btn ghost range" data-days="30" aria-pressed="true">30 days</button>
+          <button class="btn ghost range" data-days="90">90 days</button>
+          <button class="btn ghost range" data-days="365">A year</button>
+        </div>
+        <div class="row">
+          <button class="btn ghost" id="csv">Leads CSV</button>
+          <button class="btn ghost" id="refresh">Refresh</button>
+          <button class="btn ghost" id="forget">Forget key</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0"><div class="tiles" id="tiles"></div></div>
+
+    <div class="card">
+      <h2>Visitors a day</h2>
+      <div class="legend" id="legend"></div>
+      <div id="chart"></div>
+      <p class="foot" id="chartNote"></p>
+    </div>
+
+    <div class="grid2">
+      <div class="card"><h2>Most-read pages</h2><div id="pages"></div></div>
+      <div class="card"><h2>Where they came from</h2><div id="refs"></div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card"><h2>Which tool brought the email</h2><div id="byTool"></div></div>
+      <div class="card"><h2>Country and device</h2><div id="geo"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>People who have given an email address</h2>
+      <div class="scroll"><table><thead><tr>
+        <th>Email</th><th>Name</th><th>Tool</th><th>Updates</th><th>First seen</th>
+      </tr></thead><tbody id="leadRows"></tbody></table></div>
+      <p class="empty" id="leadsEmpty" hidden>Nobody yet. The moment somebody asks for their
+      interview measures, they appear here.</p>
+      <p class="foot" style="margin-top:14px"><strong>Watch the Updates column.</strong> Only
+      <em>yes</em> permits marketing. An address marked <em>no</em> asked for their report and nothing
+      else, and sending them anything else breaks the promise on the page — and, for anyone in the
+      EU, the law.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card"><h2>Paid unlocks and reviews</h2><div id="money"></div></div>
+      <div class="card"><h2>The full numbers</h2><div class="scroll" id="tableView"></div></div>
+    </div>
+
+    <p class="foot">Google Analytics measures the WordPress pages in parallel and lives at
+    <a href="https://analytics.google.com/" target="_blank" rel="noopener">analytics.google.com</a>
+    (property <span class="mono">involve-consulting.com</span>). This page is the first-party count:
+    it sets nothing on anybody's device, so the two will never agree exactly — ad blockers stop
+    Google and not this.</p>
+  </div>
+</div>
+<div id="tip" role="status"></div>
+
+<script>
+(function () {
+  var ENDPOINT = 'https://aojnpekquzpwitkyhaai.supabase.co/functions/v1/leads';
+  var KEY = 'involve.adminkey.v1';
+  var $ = function (id) { return document.getElementById(id); };
+  var stats = null, leads = null, days = 30;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+  function store(v) { try { v === null ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, v); } catch (e) {} }
+  function read() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
+  function say(t, bad) { $('authMsg').innerHTML = '<div class="msg' + (bad ? ' bad' : '') + '">' + esc(t) + '</div>'; }
+  function num(n) { return (n == null ? '—' : String(n)); }
+
+  function call(body) {
+    return fetch(ENDPOINT, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-involve-key': read() },
+      body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); });
+  }
+
+  function load() {
+    if (!read()) return;
+    say('Loading…');
+    Promise.all([call({ view: 'stats', days: days }), call({ view: 'leads' })])
+      .then(function (res) {
+        if (res[0].status === 401) { store(null); say('That key was not accepted. Ask for a new one.', true); return; }
+        if (res[0].status !== 200) { say((res[0].j && res[0].j.detail) || 'Could not load.', true); return; }
+        stats = res[0].j; leads = res[1].j;
+        $('auth').hidden = true; $('app').hidden = false;
+        render();
+      })
+      .catch(function () { say('Could not reach the server.', true); });
+  }
+
+  /* ---- tiles: the headline numbers, as hero figures rather than a chart ---- */
+  function renderTiles() {
+    var h = stats.headline, t = [
+      ['Visitors', h.visitors, h.hits + ' page views'],
+      ['Email addresses', h.leads_total, h.leads_in_range + ' in this range'],
+      ['Opted in to updates', h.marketing_opt_in, 'of ' + h.leads_total + ' people'],
+      ['Takes sent for review', h.reviews, 'interview room'],
+      ['Paid unlocks', h.paid_unlocks, 'interview room']
+    ];
+    $('tiles').innerHTML = t.map(function (x) {
+      return '<div class="tile"><b>' + num(x[1]) + '</b><span>' + esc(x[0]) + '</span>' +
+             '<small>' + esc(x[2]) + '</small></div>'; }).join('');
+  }
+
+  /* ---- the time series. Two series, so a legend is always present, and the
+     points carry direct labels at the peaks rather than a number on every one. */
+  function renderChart() {
+    var rows = stats.by_day || [];
+    var sites = ['main', 'scholarships'];
+    var colour = { main: 'var(--series-1)', scholarships: 'var(--series-2)' };
+    var byDay = {};
+    rows.forEach(function (r) {
+      byDay[r.day] = byDay[r.day] || { day: r.day, main: 0, scholarships: 0 };
+      byDay[r.day][r.site] = r.visitors;
+    });
+    var daysList = Object.keys(byDay).sort();
+    if (!daysList.length) { $('chart').innerHTML = '<p class="empty">No visits recorded in this range.</p>';
+                            $('legend').innerHTML = ''; return; }
+
+    $('legend').innerHTML = sites.map(function (s) {
+      return '<span><i style="background:' + colour[s] + '"></i>' +
+             (s === 'main' ? 'involve-consulting.com' : 'scholarships') + '</span>'; }).join('');
+
+    var W = 900, H = 240, PL = 38, PR = 14, PT = 16, PB = 26;
+    var max = 1;
+    daysList.forEach(function (d) { sites.forEach(function (s) { max = Math.max(max, byDay[d][s]); }); });
+    var x = function (i) { return PL + (daysList.length === 1 ? (W - PL - PR) / 2
+                                      : i * (W - PL - PR) / (daysList.length - 1)); };
+    var y = function (v) { return PT + (H - PT - PB) * (1 - v / max); };
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Visitors a day by site">';
+    for (var g = 0; g <= 4; g++) {
+      var gv = Math.round(max * g / 4), gy = y(gv);
+      svg += '<line class="gline" x1="' + PL + '" y1="' + gy + '" x2="' + (W - PR) + '" y2="' + gy + '"/>' +
+             '<text class="axis" x="' + (PL - 7) + '" y="' + (gy + 3) + '" text-anchor="end">' + gv + '</text>';
+    }
+    var step = Math.max(1, Math.ceil(daysList.length / 8));
+    daysList.forEach(function (d, i) {
+      if (i % step) return;
+      svg += '<text class="axis" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' +
+             esc(d.slice(5)) + '</text>';
+    });
+    sites.forEach(function (s) {
+      var pts = daysList.map(function (d, i) { return x(i) + ',' + y(byDay[d][s]); }).join(' ');
+      svg += '<polyline points="' + pts + '" fill="none" stroke="' + colour[s] +
+             '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+      /* a 2px surface ring on every marker, so overlapping series stay separable */
+      daysList.forEach(function (d, i) {
+        svg += '<circle class="dot-hit" cx="' + x(i) + '" cy="' + y(byDay[d][s]) + '" r="4.5" fill="' +
+               colour[s] + '" stroke="var(--surface-1)" stroke-width="2" ' +
+               'data-t="' + esc(d + ' · ' + (s === 'main' ? 'main site' : 'scholarships') + ' · ' +
+                                byDay[d][s] + ' visitor' + (byDay[d][s] === 1 ? '' : 's')) + '"/>';
+      });
+      /* direct label at this series' own peak only - never a number on every point */
+      var peak = 0;
+      daysList.forEach(function (d, i) { if (byDay[d][s] > byDay[daysList[peak]][s]) peak = i; });
+      if (byDay[daysList[peak]][s] > 0) {
+        svg += '<text class="axis" x="' + x(peak) + '" y="' + (y(byDay[daysList[peak]][s]) - 10) +
+               '" text-anchor="middle" style="fill:var(--text-primary);font-weight:600">' +
+               byDay[daysList[peak]][s] + '</text>';
+      }
+    });
+    svg += '</svg>';
+    $('chart').innerHTML = svg;
+    $('chartNote').textContent = 'One line per site. A dot is one day; hover any dot for the figure. ' +
+      'Only each line’s own busiest day is labelled — the rest are in the table below.';
+
+    var tip = $('tip');
+    $('chart').addEventListener('mousemove', function (e) {
+      var t = e.target && e.target.getAttribute && e.target.getAttribute('data-t');
+      if (!t) { tip.style.opacity = 0; return; }
+      tip.textContent = t; tip.style.opacity = 1;
+      tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY - 12) + 'px';
+    });
+    $('chart').addEventListener('mouseleave', function () { tip.style.opacity = 0; });
+  }
+
+  function bars(host, rows, labelKey, valueKey, colour) {
+    if (!rows || !rows.length) { $(host).innerHTML = '<p class="empty">Nothing yet.</p>'; return; }
+    var max = Math.max.apply(null, rows.map(function (r) { return r[valueKey]; })) || 1;
+    $(host).innerHTML = rows.slice(0, 10).map(function (r) {
+      var w = Math.max(2, Math.round(r[valueKey] / max * 100));
+      return '<div class="bar-row"><div class="bar-track">' +
+        '<div class="bar-fill" style="width:' + w + '%;background:' + (colour || 'var(--series-1)') + '"></div>' +
+        '<span class="bar-lab">' + esc(r[labelKey]) + '</span></div>' +
+        '<div class="num" style="font-family:var(--mono);font-size:.8rem;text-align:right">' +
+        r[valueKey] + '</div></div>';
+    }).join('');
+  }
+
+  function renderLeads() {
+    var rows = (leads && leads.rows) || [];
+    $('leadsEmpty').hidden = rows.length > 0;
+    function consent(r, kind) {
+      var hit = (r.consents || []).filter(function (c) { return String(c.purpose).indexOf(kind) > -1; })[0];
+      return hit ? !!hit.granted : false;
+    }
+    $('leadRows').innerHTML = rows.map(function (r) {
+      var m = consent(r, 'market');
+      return '<tr><td class="mono"><a href="mailto:' + esc(r.email_display) + '">' +
+        esc(r.email_display) + '</a></td><td>' + esc(r.name || '—') + '</td><td>' +
+        (r.tools || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') +
+        '</td><td class="' + (m ? 'yes' : 'no') + '">' + (m ? 'yes' : 'no') + '</td>' +
+        '<td class="mono">' + esc(String(r.first_seen_at || '').slice(0, 16).replace('T', ' ')) +
+        '</td></tr>';
+    }).join('');
+  }
+
+  function renderMoney() {
+    var e = stats.entitlements || [], o = stats.orders || [], rv = stats.reviews || [];
+    var html = '';
+    html += '<table><tbody>';
+    html += '<tr><th>Paid unlocks by school</th><td class="num">' +
+            (e.length ? e.map(function (x) { return esc(x.sku) + ' ' + x.n; }).join(', ') : 'none yet') + '</td></tr>';
+    html += '<tr><th>Orders</th><td class="num">' +
+            (o.length ? o.map(function (x) { return esc(x.status) + ' ' + x.n; }).join(', ') : 'none yet') + '</td></tr>';
+    html += '<tr><th>Takes sent for review</th><td class="num">' +
+            (rv.length ? rv.map(function (x) { return esc(x.status) + ' ' + x.n; }).join(', ') : 'none yet') + '</td></tr>';
+    html += '</tbody></table>';
+    html += '<p class="foot" style="margin-top:12px">Payment is not connected yet, so unlocks will ' +
+            'read zero however much the room is used. That is the truth, not a broken counter.</p>';
+    $('money').innerHTML = html;
+  }
+
+  /* The table view. Required relief for the aqua slot, and the place every
+     unlabelled point in the chart can be read off exactly. */
+  function renderTable() {
+    var rows = stats.by_day || [];
+    if (!rows.length) { $('tableView').innerHTML = '<p class="empty">Nothing in this range.</p>'; return; }
+    $('tableView').innerHTML = '<table><thead><tr><th>Day</th><th>Site</th>' +
+      '<th style="text-align:right">Visitors</th><th style="text-align:right">Views</th></tr></thead><tbody>' +
+      rows.slice().reverse().map(function (r) {
+        return '<tr><td class="mono">' + esc(r.day) + '</td><td>' + esc(r.site) +
+               '</td><td class="num">' + r.visitors + '</td><td class="num">' + r.hits + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function render() {
+    $('stamp').textContent = 'to ' + String(stats.generated_at || '').slice(0, 16).replace('T', ' ') +
+                             ' · last ' + stats.days + ' days';
+    renderTiles();
+    renderChart();
+    bars('pages', (stats.top_pages || []).map(function (p) {
+      return { label: (p.site === 'scholarships' ? 'scholarships' : '') + p.path, visitors: p.visitors }; }),
+      'label', 'visitors');
+    bars('refs', (stats.referrers || []).map(function (r) {
+      return { label: r.referrer, hits: r.hits }; }), 'label', 'hits', 'var(--series-2)');
+    bars('byTool', (stats.leads_by_tool || []).map(function (t) {
+      return { label: t.tool, people: t.people }; }), 'label', 'people', 'var(--series-3)');
+    var geo = (stats.countries || []).map(function (c) { return { label: c.country, hits: c.hits }; });
+    bars('geo', geo, 'label', 'hits');
+    renderLeads();
+    renderMoney();
+    renderTable();
+  }
+
+  $('go').addEventListener('click', function () {
+    var v = ($('key').value || '').trim();
+    if (!v) { say('Paste the key first.', true); return; }
+    store(v); $('key').value = ''; load();
+  });
+  $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('go').click(); });
+  $('refresh').addEventListener('click', load);
+  $('forget').addEventListener('click', function () {
+    store(null); $('app').hidden = true; $('auth').hidden = false; say('Key removed from this device.');
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.range'), function (b) {
+    b.addEventListener('click', function () {
+      days = parseInt(b.getAttribute('data-days'), 10);
+      Array.prototype.forEach.call(document.querySelectorAll('.range'), function (o) {
+        o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      load();
+    });
+  });
+
+  $('csv').addEventListener('click', function () {
+    var rows = (leads && leads.rows) || [];
+    function consent(r, kind) {
+      var hit = (r.consents || []).filter(function (c) { return String(c.purpose).indexOf(kind) > -1; })[0];
+      return hit ? !!hit.granted : false;
+    }
+    var lines = ['email,name,tools,report_consent,marketing_consent,first_seen,last_seen'];
+    rows.forEach(function (r) {
+      lines.push([r.email_display, r.name || '', (r.tools || []).join(' '),
+        consent(r, 'report') || consent(r, 'transactional') ? 'yes' : 'no',
+        consent(r, 'market') ? 'yes' : 'no', r.first_seen_at || '', r.last_seen_at || '']
+        .map(function (c) { var s = String(c == null ? '' : c);
+          return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(','));
+    });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'involve-leads-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  });
+
+  if (read()) load();
+})();
+</script>
+</body>
+</html>
