@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Leads — Involve Consulting</title>
+<style>
+  :root{--brand:#58868C;--brand-dark:#3F686D;--gold:#EBB305;--paper:#fff;--sunk:#F4F6F6;
+        --ink:#1A1A1A;--mid:#55605F;--faint:#646E6D;--rule:#E2E7E7;--rule2:#C6D0D0;--r:3px;
+        --sans:'Montserrat',Helvetica,Arial,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--sunk);color:var(--ink);font:15px/1.6 var(--sans)}
+  .wrap{max-width:1140px;margin:0 auto;padding:28px 20px 80px}
+  h1{font-size:1.6rem;margin:0 0 4px}
+  .sub{color:var(--faint);font-size:.9rem;margin:0 0 22px}
+  .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:20px 22px;margin-bottom:18px}
+  label{display:block;font-size:.85rem;font-weight:600;margin-bottom:6px}
+  input[type=password],input[type=text]{width:100%;max-width:460px;padding:9px 11px;border:1px solid var(--rule2);
+        border-radius:var(--r);font:inherit;font-family:var(--mono);font-size:.86rem}
+  .btn{background:var(--brand);color:#fff;border:0;border-radius:var(--r);padding:10px 20px;
+       font:inherit;font-weight:600;cursor:pointer}
+  .btn:hover{background:var(--brand-dark)}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--rule2)}
+  .msg{padding:10px 13px;border-radius:var(--r);background:#FDF4DC;border:1px solid var(--gold);
+       font-size:.88rem;margin-top:12px}
+  .msg.bad{background:#FBECEA;border-color:#C0392B}
+  .stats{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:16px}
+  .stat b{display:block;font-family:var(--mono);font-size:1.7rem;font-weight:500;line-height:1.2}
+  .stat span{font-size:.78rem;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  table{width:100%;border-collapse:collapse;font-size:.87rem}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
+     background:var(--sunk);position:sticky;top:0}
+  td.mono{font-family:var(--mono);font-size:.8rem;white-space:nowrap}
+  .tag{display:inline-block;font-family:var(--mono);font-size:.7rem;padding:2px 7px;border-radius:10px;
+       background:var(--sunk);border:1px solid var(--rule2);color:var(--mid);margin:1px 3px 1px 0}
+  .yes{color:var(--brand-dark);font-weight:600}
+  .no{color:var(--faint)}
+  .scroll{overflow-x:auto}
+  .foot{font-size:.82rem;color:var(--faint);line-height:1.6;max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Leads</h1>
+  <p class="sub">Every email address the free tools have collected, with what each person actually
+  consented to. Private page, not indexed, not linked from anywhere.</p>
+
+  <div class="card" id="auth">
+    <label for="key">Admin key</label>
+    <input type="password" id="key" autocomplete="off" spellcheck="false" placeholder="ivk_…">
+    <p style="font-size:.82rem;color:var(--faint);margin:8px 0 14px;max-width:62ch">
+      Paste it once and this browser remembers it. It is held on this device only and is sent in a
+      header, never in the address bar — so it will not end up in your history or in a screenshot of
+      the URL. Treat it like a password; ask me and I will issue a new one and kill the old.</p>
+    <button class="btn" id="go">Open</button>
+    <div id="authMsg"></div>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><b id="nTotal">—</b><span>people</span></div>
+        <div class="stat"><b id="nMarketing">—</b><span>opted in to updates</span></div>
+        <div class="stat"><b id="nTools">—</b><span>tools used</span></div>
+      </div>
+      <button class="btn" id="csv">Download CSV</button>
+      <button class="btn ghost" id="refresh">Refresh</button>
+      <button class="btn ghost" id="forget">Forget the key on this device</button>
+    </div>
+
+    <div class="card scroll">
+      <table id="tbl"><thead><tr>
+        <th>Email</th><th>Name</th><th>Tool</th><th>Report</th><th>Updates</th><th>First seen</th><th>What they told the tool</th>
+      </tr></thead><tbody id="rows"></tbody></table>
+      <p id="empty" class="foot" hidden>Nobody has given an address yet. The moment somebody asks for
+      their interview measures, they appear here.</p>
+    </div>
+
+    <p class="foot">These are real people's contact details. The second column of consent is the only
+    one that permits marketing: an address with <em>Updates: no</em> asked for their report and
+    nothing else, and emailing it anything else is both a broken promise and, for anyone in the EU,
+    unlawful. Anyone who asks to be removed goes on the suppression list and stops appearing here.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ENDPOINT = 'https://aojnpekquzpwitkyhaai.supabase.co/functions/v1/leads';
+  var KEY = 'involve.adminkey.v1';
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; });
+  }
+  function store(v) {
+    try { if (v === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, v); } catch (e) {}
+  }
+  function read() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
+  function say(t, bad) { $('authMsg').innerHTML = '<div class="msg' + (bad ? ' bad' : '') + '">' + esc(t) + '</div>'; }
+
+  function consentOf(row, kind) {
+    var hit = (row.consents || []).filter(function (c) {
+      return String(c.purpose).indexOf(kind) > -1; })[0];
+    return hit ? !!hit.granted : false;
+  }
+
+  function render() {
+    var rows = data.rows || [];
+    $('nTotal').textContent = data.total;
+    $('nMarketing').textContent = data.marketing_opted_in;
+    var tools = {};
+    rows.forEach(function (r) { (r.tools || []).forEach(function (t) { tools[t] = 1; }); });
+    $('nTools').textContent = Object.keys(tools).length;
+
+    $('empty').hidden = rows.length > 0;
+    $('rows').innerHTML = rows.map(function (r) {
+      var facts = r.facts && Object.keys(r.facts).length
+        ? Object.keys(r.facts).slice(0, 6).map(function (k) {
+            return '<span class="tag">' + esc(k) + ': ' + esc(String(r.facts[k]).slice(0, 28)) + '</span>'; }).join('')
+        : '<span class="no">—</span>';
+      return '<tr>' +
+        '<td class="mono"><a href="mailto:' + esc(r.email_display) + '">' + esc(r.email_display) + '</a></td>' +
+        '<td>' + esc(r.name || '—') + '</td>' +
+        '<td>' + (r.tools || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</td>' +
+        '<td class="' + (consentOf(r, 'report') || consentOf(r, 'transactional') ? 'yes' : 'no') + '">' +
+          (consentOf(r, 'report') || consentOf(r, 'transactional') ? 'yes' : 'no') + '</td>' +
+        '<td class="' + (consentOf(r, 'market') ? 'yes' : 'no') + '">' +
+          (consentOf(r, 'market') ? 'yes' : 'no') + '</td>' +
+        '<td class="mono">' + esc(String(r.first_seen_at || '').slice(0, 16).replace('T', ' ')) + '</td>' +
+        '<td>' + facts + '</td></tr>';
+    }).join('');
+  }
+
+  function load() {
+    var key = read();
+    if (!key) return;
+    say('Loading…');
+    fetch(ENDPOINT, { method: 'POST', headers: { 'content-type': 'application/json', 'x-involve-key': key },
+                      body: '{}' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+      .then(function (res) {
+        if (res.status === 401) { store(null); say('That key was not accepted. Ask for a new one.', true); return; }
+        if (!res.ok) { say((res.j && res.j.detail) || 'Could not load the list.', true); return; }
+        data = res.j;
+        $('auth').hidden = true;
+        $('app').hidden = false;
+        render();
+      })
+      .catch(function () { say('Could not reach the server.', true); });
+  }
+
+  $('go').addEventListener('click', function () {
+    var v = ($('key').value || '').trim();
+    if (!v) { say('Paste the key first.', true); return; }
+    store(v); $('key').value = ''; load();
+  });
+  $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('go').click(); });
+  $('refresh').addEventListener('click', load);
+  $('forget').addEventListener('click', function () {
+    store(null); $('app').hidden = true; $('auth').hidden = false; say('Key removed from this device.');
+  });
+
+  $('csv').addEventListener('click', function () {
+    var head = ['email', 'name', 'tools', 'report_consent', 'marketing_consent', 'first_seen', 'last_seen'];
+    var lines = [head.join(',')];
+    (data.rows || []).forEach(function (r) {
+      var cell = [r.email_display, r.name || '', (r.tools || []).join(' '),
+                  consentOf(r, 'report') || consentOf(r, 'transactional') ? 'yes' : 'no',
+                  consentOf(r, 'market') ? 'yes' : 'no',
+                  r.first_seen_at || '', r.last_seen_at || ''];
+      lines.push(cell.map(function (c) {
+        var s = String(c == null ? '' : c);
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(','));
+    });
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'involve-leads-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  });
+
+  if (read()) load();
+})();
+</script>
+</body>
+</html>
