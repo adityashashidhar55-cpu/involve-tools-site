@@ -358,8 +358,24 @@
       return { label: r.referrer, hits: r.hits }; }), 'label', 'hits', 'var(--series-2)');
     bars('byTool', (stats.leads_by_tool || []).map(function (t) {
       return { label: t.tool, people: t.people }; }), 'label', 'people', 'var(--series-3)');
-    var geo = (stats.countries || []).map(function (c) { return { label: c.country, hits: c.hits }; });
-    bars('geo', geo, 'label', 'hits');
+    /* The counter was built to record as little as possible and it never asked
+       for a country or a device. Rather than draw a bar chart of one bar
+       labelled "?", say so - an empty panel that looks like data is worse than
+       an empty panel that admits it. */
+    var geo = (stats.countries || []).filter(function (c) { return c.country && c.country !== '?'; });
+    var dev = (stats.devices || []).filter(function (d) { return d.device && d.device !== '?'; });
+    if (!geo.length && !dev.length) {
+      $('geo').innerHTML = '<p class="empty">Not recorded. The counter stores a day, a site, a path, ' +
+        'a referrer and a salted daily visitor hash \u2014 and deliberately nothing else, which is why ' +
+        'it needs no cookie banner. Country and device can be added from the request headers ' +
+        'without collecting anything new about a person; say the word.</p>';
+    } else {
+      bars('geo', geo.map(function (c) { return { label: c.country, hits: c.hits }; }), 'label', 'hits');
+      if (dev.length) {
+        $('geo').innerHTML += '<div style="margin-top:14px">' + dev.map(function (d) {
+          return '<span class="tag">' + esc(d.device) + ' ' + d.hits + '</span>'; }).join('') + '</div>';
+      }
+    }
     renderLeads();
     renderMoney();
     renderTable();
