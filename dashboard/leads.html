@@ -100,7 +100,10 @@
     try { if (v === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, v); } catch (e) {}
   }
   function read() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
-  function say(t, bad) { $('authMsg').innerHTML = '<div class="msg' + (bad ? ' bad' : '') + '">' + esc(t) + '</div>'; }
+  function say(t, bad) { $('authMsg').innerHTML = '<div class="msg' + (bad ? ' bad' : '') + '">' + esc(t) + '</div>';
+    /* An error during Refresh used to be written into the hidden login card, so it failed silently. */
+    if (bad) { $('auth').hidden = false; }
+    if (bad && !read()) { $('app').hidden = true; } }
 
   function consentOf(row, kind) {
     var hit = (row.consents || []).filter(function (c) {
@@ -174,6 +177,8 @@
                   r.first_seen_at || '', r.last_seen_at || ''];
       lines.push(cell.map(function (c) {
         var s = String(c == null ? '' : c);
+        /* names come from a public form: stop Excel/Sheets running them as formulas */
+        if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
         return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
       }).join(','));
     });

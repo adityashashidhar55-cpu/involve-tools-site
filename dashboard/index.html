@@ -175,7 +175,10 @@
     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
   function store(v) { try { v === null ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, v); } catch (e) {} }
   function read() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
-  function say(t, bad) { $('authMsg').innerHTML = '<div class="msg' + (bad ? ' bad' : '') + '">' + esc(t) + '</div>'; }
+  function say(t, bad) { $('authMsg').innerHTML = '<div class="msg' + (bad ? ' bad' : '') + '">' + esc(t) + '</div>';
+    /* An error during Refresh used to be written into the hidden login card, so it failed silently. */
+    if (bad) { $('auth').hidden = false; }
+    if (bad && !read()) { $('app').hidden = true; } }
   function num(n) { return (n == null ? '—' : String(n)); }
 
   function call(body) {
@@ -192,7 +195,7 @@
       .then(function (res) {
         if (res[0].status === 401) { store(null); say('That key was not accepted. Ask for a new one.', true); return; }
         if (res[0].status !== 200) { say((res[0].j && res[0].j.detail) || 'Could not load.', true); return; }
-        stats = res[0].j; leads = res[1].j;
+        stats = res[0].j; leads = res[1].status === 200 ? res[1].j : null;
         $('auth').hidden = true; $('app').hidden = false;
         render();
       })
@@ -302,6 +305,8 @@
   function renderLeads() {
     var rows = (leads && leads.rows) || [];
     $('leadsEmpty').hidden = rows.length > 0;
+    $('leadsEmpty').textContent = leads ? 'Nobody yet. The moment somebody asks for their report, they appear here.'
+                                        : 'The leads list did not load. Press Refresh to try again.';
     function consent(r, kind) {
       var hit = (r.consents || []).filter(function (c) { return String(c.purpose).indexOf(kind) > -1; })[0];
       return hit ? !!hit.granted : false;
@@ -424,6 +429,7 @@
         consent(r, 'report') || consent(r, 'transactional') ? 'yes' : 'no',
         consent(r, 'market') ? 'yes' : 'no', r.first_seen_at || '', r.last_seen_at || '']
         .map(function (c) { var s = String(c == null ? '' : c);
+          if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
           return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(','));
     });
     var a = document.createElement('a');
