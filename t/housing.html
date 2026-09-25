@@ -290,6 +290,26 @@ input[type=number] { font-family: var(--mono); }
   align-items: flex-start; max-width: 60ch; margin-bottom: 10px;
 }
 .gate-check input[type=checkbox] { width: auto; margin-top: 4px; flex: 0 0 auto; }
+/* "Get this by email" form (email-dev, 2026-09-25) */
+.igate { max-width: 660px; }
+.igate-h { margin: 0 0 6px; }
+.igate-intro { margin: 0 0 14px; max-width: 62ch; }
+.igate-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0 16px; }
+.igate-fields .field { margin-bottom: 12px; min-width: 0; }
+.igate-fields input { width: 100%; box-sizing: border-box; }
+.igate .gate-check span { overflow-wrap: anywhere; }
+.igate-privacy { max-width: 62ch; font-size: .8rem; margin: 6px 0 0; }
+.igate-actions { margin-top: 14px; }
+.igate-msg { margin-top: 12px; }
+.igate-msg .flag { max-width: 62ch; }
+.igate-again { margin-top: 12px; font-size: .85rem; padding: 7px 14px; }
+.igate [aria-invalid="true"] { border-color: #C0392B; box-shadow: 0 0 0 1px #C0392B; }
+.igate .gate-check input[aria-invalid="true"] { outline: 2px solid #C0392B; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .igate-fields { grid-template-columns: 1fr; }
+  .igate-actions .btn { width: 100%; }
+}
+@media print { .igate { display: none; } }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 .metric-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
@@ -1112,158 +1132,253 @@ window.INVOLVE_PAYLOAD_LABELS_BY_TOOL = {
    The two are stored SEPARATELY and mean different things. The first is the
    report the person asked for. The second is marketing, is optional, and
    leaving it unticked changes nothing about the first. */
+/* ---------------------------------------------------------------------------
+   THE EMAIL FORM ("Get this by email"). One component, used by every tool.
+
+   - It is shown AFTER the result. The tools stay free and work without it.
+   - Two tick boxes, stored separately:
+       1. "Email me this result."  Required, because it is what the form does.
+       2. Tips on deadlines and funding.  Optional, never ticked for you
+          (GDPR: marketing consent must be separate and unticked).
+   - The privacy line lists every field the form sends, built from the same
+     keys the tool puts in its payload, and that exact sentence is stored with
+     the consent record. Bump `version` whenever a sentence below changes.
+   - A tool may pass `summary()` returning { result: 'one line', top: [...] }.
+     This is a short summary of the result (numbers, school or country names),
+     never free text the person typed.
+   --------------------------------------------------------------------------- */
 window.INVOLVE_GATE_CONSENT = {
-  version: 'gate-2026-09-06.1',
-  report: 'Email me this report. One email, because I asked for it.',
-  marketing: 'Optional, and a separate decision: also send occasional notes about deadlines and ' +
-             'funding. Leave this unticked and you still get the report. One click unsubscribes, ' +
-             'and we do not pass your address to anyone.'
+  version: 'gate-2026-09-25.1',
+  report: 'Email me this result.',
+  marketing: 'Also send me occasional tips on deadlines and funding. (Optional. You can stop them at any time.)'
 };
 
+/* Labels for the keys added in this version. The old labels stay as they were. */
+(function () {
+  var L = window.INVOLVE_PAYLOAD_LABELS = window.INVOLVE_PAYLOAD_LABELS || {};
+  var add = {
+    result:     'a one-line summary of your result',
+    top:        'the main items in your result (for example school or country names)',
+    residence:  'the country you live in now',
+    noTestOnly: 'whether you ticked “no GMAT or GRE”',
+    tool_page:  'which page you used'
+  };
+  for (var k in add) { if (!L[k]) L[k] = add[k]; }
+})();
+
+window.__involveGateN = window.__involveGateN || 0;
+
 window.involveGate = function (mount, opts) {
+  if (!mount) return;
+  opts = opts || {};
   var CONSENT = window.INVOLVE_GATE_CONSENT;
   var byTool = (window.INVOLVE_PAYLOAD_LABELS_BY_TOOL || {})[opts.tool] || {};
-  var labels = window.INVOLVE_PAYLOAD_LABELS, listed = [];
-  try {
-    var p = opts.payload() || {};
-    for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) {
-      listed.push(byTool[k] || labels[k] || ('the value of “' + k + '”'));
-    } }
-  } catch (e) { listed = []; }
-  var sends = listed.length === 0 ? 'nothing else'
-            : listed.length === 1 ? listed[0]
-            : listed.slice(0, -1).join(', ') + ' and ' + listed[listed.length - 1];
+  var labels = window.INVOLVE_PAYLOAD_LABELS || {};
+  var uid = 'ig' + (++window.__involveGateN);
 
-  /* The disclosure sentence is built once, printed on screen, and stored with
-     the consent record, so what was promised and what is held are the same
-     string. It names every key this particular tool's payload contains. */
-  var disclosure = 'Tick the first box and this is the whole of what leaves your browser: your ' +
-                   'name, your email address, and ' + sends + '. Nothing else on this page is sent.';
+  /* Shorten to n characters without cutting a word in half (supervisor-email). */
+  function clip(v, n) {
+    v = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    if (v.length <= n) return v;
+    var cut = v.slice(0, n - 1), sp = cut.lastIndexOf(' ');
+    if (sp > n * 0.6) cut = cut.slice(0, sp);
+    return cut.replace(/[\s,;:.\u2014-]+$/, '') + '…';
+  }
 
-  /* A <form>, so Enter in the email field submits. Without it the single most
-     common form habit there is did nothing at all - no message, no feedback. */
+  /* What this form sends, in words. */
+  function keysNow() {
+    var keys = [];
+    try { var p = opts.payload ? (opts.payload() || {}) : {};
+          for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) keys.push(k); } catch (e) {}
+    if (opts.summary) {
+      /* Name only what the summary really holds. If it is not ready yet, name both (never too little). */
+      var sm = {}; try { sm = opts.summary() || {}; } catch (e) {}
+      var hasR = !!sm.result, hasT = !!(sm.top && sm.top.filter(Boolean).length);
+      if ((hasR || !hasT) && keys.indexOf('result') < 0) keys.push('result');
+      if ((hasT || !hasR) && keys.indexOf('top') < 0) keys.push('top');
+    }
+    return keys;
+  }
+  function disclosureFor(keys) {
+    var listed = keys.map(function (k) { return byTool[k] || labels[k] || ('the value of “' + k + '”'); });
+    var sends = listed.length === 0 ? '' : listed.length === 1 ? ', and ' + listed[0]
+              : ', ' + listed.slice(0, -1).join(', ') + ' and ' + listed[listed.length - 1];
+    return 'What we send: your name, your email' + sends + '. Nothing else from this page. ' +
+           'We use it to send this email. We only send other emails if you tick the second box. ' +
+           'We never sell or share your email. To delete your details, write to contact@involve-consulting.com.';
+  }
+  var disclosure = disclosureFor(keysNow());
+
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
   mount.innerHTML =
-    '<form novalidate id="gForm">' +
-    '<div class="field" style="max-width:400px"><label for="gName">Your name</label>' +
-    '<input type="text" id="gName" autocomplete="name"></div>' +
-    '<div class="field" style="max-width:400px"><label for="gEmail">Email address</label>' +
-    '<input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com"></div>' +
-    '<label class="gate-check"><input type="checkbox" id="gConsent">' +
-    '<span>' + CONSENT.report + '</span></label>' +
-    '<label class="gate-check"><input type="checkbox" id="gMarketing">' +
-    '<span>' + CONSENT.marketing + '</span></label>' +
-    '<p class="hint" style="max-width:60ch">' + disclosure + '</p>' +
-    '<div style="margin-top:14px"><button class="btn" type="submit" id="gSend">' +
-      (opts.cta || 'Email me the report') + '</button></div>' +
-    /* role=alert + aria-live, because every validation error and the whole
-       "not connected yet" message used to be injected in silence. */
-    '<div id="gMsg" role="alert" aria-live="assertive" aria-atomic="true" style="margin-top:12px"></div>' +
+    '<form class="igate" novalidate>' +
+    (opts.heading ? '<h3 class="igate-h">' + esc(opts.heading) + '</h3>' : '') +
+    (opts.intro ? '<p class="igate-intro">' + esc(opts.intro) + '</p>' : '') +
+    '<div class="igate-body">' +
+      '<div class="igate-fields">' +
+        '<div class="field"><label for="' + uid + 'n">Your name</label>' +
+        '<input type="text" id="' + uid + 'n" data-g="name" autocomplete="name" maxlength="200"></div>' +
+        '<div class="field"><label for="' + uid + 'e">Your email</label>' +
+        '<input type="email" id="' + uid + 'e" data-g="email" autocomplete="email" inputmode="email" ' +
+        'maxlength="200" placeholder="name@example.com"></div>' +
+      '</div>' +
+      '<label class="gate-check"><input type="checkbox" data-g="consent"><span>' + esc(CONSENT.report) + '</span></label>' +
+      '<label class="gate-check"><input type="checkbox" data-g="marketing"><span>' + esc(CONSENT.marketing) + '</span></label>' +
+      '<p class="hint igate-privacy" data-g="privacy">' + esc(disclosure) + '</p>' +
+      '<div class="igate-actions"><button class="btn" type="submit" data-g="send">' +
+        esc(opts.cta || 'Email me this result') + '</button></div>' +
+    '</div>' +
+    '<div class="igate-msg" data-g="msg" aria-live="polite"></div>' +
     '</form>';
 
-  var form = mount.querySelector('#gForm');
-  var btn = mount.querySelector('#gSend');
+  var form = mount.querySelector('form');
+  function q(n) { return mount.querySelector('[data-g="' + n + '"]'); }
+  var btn = q('send'), body = mount.querySelector('.igate-body');
   var sending = false;
+  /* The result can change after the form is drawn: keep the privacy line true. */
+  form.addEventListener('focusin', function () {
+    disclosure = disclosureFor(keysNow()); q('privacy').textContent = disclosure;
+  });
 
-  /* Never build a message by concatenating an address into innerHTML. The
-     validating regex excludes '@' and whitespace and nothing else, so '<', '>'
-     and '"' all pass it, and a real <svg> element built from user input was
-     reproducible on the two live-endpoint branches. */
-  function say(cls, nodes) {
-    var msg = mount.querySelector('#gMsg');
+  /* Messages are built with text nodes only, never by putting what someone
+     typed into innerHTML. */
+  function say(kind, parts, extraBtn) {
+    var msg = q('msg');
     msg.textContent = '';
     var box = document.createElement('div');
-    box.className = cls;
+    box.className = kind === 'good' ? 'flag good' : kind === 'wait' ? 'hint' : 'flag';
+    if (kind === 'bad') box.setAttribute('role', 'alert');
     var para = document.createElement('p');
-    nodes.forEach(function (n) { para.appendChild(typeof n === 'string' ? document.createTextNode(n) : n); });
+    para.style.margin = '0';
+    parts.forEach(function (n) {
+      if (typeof n === 'string') para.appendChild(document.createTextNode(n));
+      else { var b = document.createElement('strong'); b.textContent = n.b; para.appendChild(b); }
+    });
     box.appendChild(para);
+    if (extraBtn) {
+      var again = document.createElement('button');
+      again.type = 'button'; again.className = 'btn btn-quiet igate-again';
+      again.textContent = 'Send to a different email';
+      again.addEventListener('click', function () {
+        body.hidden = false; q('msg').textContent = ''; q('email').focus();
+      });
+      box.appendChild(again);
+    }
     msg.appendChild(box);
   }
-  function strong(t) { var e = document.createElement('strong'); e.textContent = t; return e; }
+  function bad(field, text) {
+    ['name', 'email', 'consent'].forEach(function (f) { q(f).removeAttribute('aria-invalid'); });
+    if (field) { q(field).setAttribute('aria-invalid', 'true'); q(field).focus(); }
+    say('bad', [text]);
+  }
 
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
-    if (sending) return;                       /* three rapid clicks used to fire three POSTs */
-    var name = mount.querySelector('#gName').value.trim();
-    var email = mount.querySelector('#gEmail').value.trim();
-    if (!name) { say('flag', ['Enter your name.']); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      say('flag', ['That does not look like an email address.']); return; }
-    if (!mount.querySelector('#gConsent').checked) {
-      say('flag', ['Tick the first box so we know we may email you the report. The second box is ' +
-                   'optional and you can leave it alone.']); return; }
+    if (sending) return;
+    var name = q('name').value.trim();
+    var email = q('email').value.trim();
+    if (!name) { bad('name', 'Please type your name.'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email) || email.length > 200) {
+      bad('email', 'Please check your email address. It should look like name@example.com.'); return; }
+    if (!q('consent').checked) {
+      bad('consent', 'Please tick “' + CONSENT.report + '” so we can send it. The second box is optional.'); return; }
+    ['name', 'email', 'consent'].forEach(function (f) { q(f).removeAttribute('aria-invalid'); });
 
+    /* The payload: the tool's facts plus its short result summary. */
+    var payload = {};
+    try { payload = opts.payload ? (opts.payload() || {}) : {}; } catch (e) { payload = {}; }
+    if (opts.summary) {
+      try {
+        var sm = opts.summary() || {};
+        if (sm.result) payload.result = clip(sm.result, 200);
+        if (sm.top && sm.top.length) payload.top = sm.top.filter(Boolean).slice(0, 10).map(function (x) { return clip(x, 160); });
+      } catch (e) {}
+    }
+    disclosure = disclosureFor(keysNow());
+    q('privacy').textContent = disclosure;
+
+    var marketing = q('marketing').checked;
     sending = true;
     btn.disabled = true;
     var wasLabel = btn.textContent;
     btn.textContent = 'Sending…';
-    mount.querySelector('#gMsg').textContent = '';
-    var hint = document.createElement('p');
-    hint.className = 'hint';
-    hint.textContent = 'Sending…';
-    mount.querySelector('#gMsg').appendChild(hint);
-    window.involveTrack('gate_submit', { tool: opts.tool, marketing: mount.querySelector('#gMarketing').checked });
+    say('wait', ['Sending…']);
+    if (window.involveTrack) window.involveTrack('gate_submit', { tool: opts.tool, marketing: marketing });
 
     function done() { sending = false; btn.disabled = false; btn.textContent = wasLabel; }
+    var onPage = opts.onPage ? String(opts.onPage) : '';
+    var what = opts.summary ? 'a summary' : 'a link back to this page';
 
-    window.involveCapture({ name: name, email: email, tool: opts.tool,
-                            marketing: mount.querySelector('#gMarketing').checked,
-                            /* The consent record travels with the submission:
-                               the version, the sentence beside the box that was
-                               ticked, and the list of fields this gate promised
-                               to send. The endpoint stores each separately. */
+    window.involveCapture({ name: name, email: email, tool: opts.tool, marketing: marketing,
                             consent: true,
                             consent_version: CONSENT.version,
                             consent_text: CONSENT.report + ' ' + disclosure,
                             marketing_text: CONSENT.marketing,
-                            source_url: String(location.href).split('?')[0],
-                            payload: opts.payload() })
+                            source_url: String(location.href).split('?')[0].split('#')[0] +
+                                        (location.hash && location.hash.indexOf('#/') === 0 ? location.hash.split('?')[0] : ''),
+                            payload: payload })
       .then(function (res) {
         done();
+        res = res || {};
         if (res.suppressed) {
-          /* On the do-not-contact list. Nothing was stored, and saying "on its
-             way" to somebody who has asked us to stop would be the worst
-             possible answer. */
-          say('flag', [String(res.message || 'That address is on our do-not-contact list, so ' +
-                              'nothing was stored and nothing will be sent.')]);
+          say('bad', ['This email address asked us not to contact it, so we saved nothing. ' +
+                      'If this is a mistake, write to contact@involve-consulting.com.']);
         } else if (res.duplicate) {
-          say('flag', ['This report has already been requested for ', email,
-                       '. Check that inbox, including spam. We send one per address per tool, so ' +
-                       'using another tool here still gets you its own email.']);
-        } else if (res.email_sent === false) {
-          /* Stored, consented, and NOT emailed - because a secret the owner has
-             to supply is missing. Print the endpoint's own sentence, which names
-             the secret. The alternative is "On its way" over an email that will
-             never arrive, which is the exact failure this build refuses to
-             repeat. */
-          say('flag', [strong('Saved, but not emailed yet.'), ' ',
-                       String(res.message || 'The report could not be emailed. We can see this ' +
-                              'and will send it by hand: contact@involve-consulting.com.')]);
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We already had your request, so we will not email you twice.']
+                             : [{ b: 'We already have this request.' }, ' We will not email ' + email +
+                                ' twice. Please check your inbox and spam folder.'], true);
+        } else if (res.email_sent === true) {
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We have also emailed ' + what + ' to ' + email + '.']
+                             : [{ b: 'Done.' }, ' We have emailed this to ' + email + '. If you can’t find it, check your spam folder.'], true);
+        } else if (res.stored) {
+          /* Saved, and queued: the email goes out as soon as sending is
+             switched on (the queue is retried every hour). */
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We will also email ' + what + ' to ' + email + '.']
+                             : [{ b: 'Thanks, ' + name + '.' }, ' We have got your details. Your result will reach ' +
+                                email + ' soon. If you can’t find it, check your spam folder.'], true);
         } else {
-          say('flag good', ['On its way to ', email, '.']);
+          say('bad', [String(res.message || 'Sorry, that did not work. Please try again, or write to contact@involve-consulting.com.')]);
         }
         if (opts.onSent) opts.onSent(res);
       })
       .catch(function (e) {
         done();
         if (e && e.notWired) {
-          say('flag', [strong('Not connected yet.'),
-                       ' This form is not working yet. Nothing was sent or saved. ' +
-                       'Please email contact@involve-consulting.com instead.']);
+          say('bad', ['Email is not working on this page right now, so nothing was sent. ' +
+                      'Please write to contact@involve-consulting.com.']);
+        } else if (e && e.offline) {
+          say('bad', ['We could not connect, so nothing was sent. Check your internet and try again.']);
+        } else if (e && e.rate_limited) {
+          /* The server says which limit was hit (this connection, this address, or the whole day). */
+          say('bad', [String(e.message || 'Too many requests from this connection. Nothing was saved. Please try again in an hour.')]);
         } else if (e && e.message) {
-          /* The endpoint names what happened and whether anything was stored -
-             a bad address, the rate limit, a refusal. Pass it through: a
-             message somebody can act on beats "that did not send". */
-          say('flag', [String(e.message)]);
+          say('bad', [String(e.message)]);
         } else {
-          say('flag', ['That did not send. Please try again, or email us at ' +
-                       'contact@involve-consulting.com.']);
+          say('bad', ['Sorry, that did not work. Nothing was saved. Please try again, or write to ' +
+                      'contact@involve-consulting.com.']);
         }
+        if (opts.onFail) { try { opts.onFail(e || {}); } catch (x) {} }
       });
   });
 };
+
+/* Small helper for tools: the visible text of the first match, cut short. */
+window.involveText = function (sel, root, n) {
+  try {
+    var el = (root || document).querySelector(sel);
+    if (!el) return '';
+    var t = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+    n = n || 200;
+    return t.length > n ? t.slice(0, n - 1) + '…' : t;
+  } catch (e) { return ''; }
+};
 </script>
 <script>
-var VIEWS = {"housing": {"title": "Housing finder", "html": "<div data-view=\"housing\"><div class=\"toolbar-strip\"><div class=\"wrap\"><span class=\"stamp is-unsourced\" id=\"hStamp\">Beta</span>\n<span id=\"hNote\">Links to each country's main rental websites. We earn no commission from any of them.</span></div></div><main class=\"wrap\">\n<div class=\"tool-head\">\n  <h1>Housing finder</h1>\n  <p class=\"lede\">Where students in each country really look for a flat, and the local rules you\n  need to know. Most students who lose a flat, or a deposit, lose it because nobody told them the rules.</p>\n</div>\n<div class=\"panel\">\n  <label for=\"hc\">Where are you going?</label>\n  <select id=\"hc\"></select>\n</div>\n<div id=\"hout\"></div>\n<div class=\"panel\" id=\"housingGateWrap\" hidden>\n  <h2>Email me this country's checklist</h2>\n  <p id=\"housingGateBlurb\">The websites, local rules and scam warnings for the country you picked, in one document.\n  Everything above stays free.</p>\n  <div id=\"gateHousing\"></div>\n</div>\n</main></div>", "js": "\n(function(){\n  var H=window.INVOLVE_HOUSING||[], sel=document.getElementById('hc');\n  var UTM='?utm_source=tools&utm_medium=housing&utm_campaign=';\n\n  /* The stamp used to be the literal string \"Ready\" in the markup, on a tool\n     with rules for 2 of 14 countries. Compute it, the way visa and visa-docs do,\n     so it cannot drift from the data again. */\n  var okRules=H.filter(function(h){return h.status==='verified'&&h.rules&&h.rules.length;});\n  var portals=H.reduce(function(a,h){return a.concat(h.portals||[]);},[]);\n  var unchecked=portals.filter(function(p){return !p.checked;}).length;\n  (function(){\n    var st=document.getElementById('hStamp');\n    if(okRules.length===H.length){st.className='stamp is-ready';st.textContent='Live';}\n    else{st.className='stamp is-unsourced';st.textContent='Beta';}\n    document.getElementById('hNote').textContent=\n      'Local rules for '+okRules.length+' of '+H.length+' countries so far. For the others we list '+\n      'rental websites only. We earn no commission from any of them.';\n  })();\n\n  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}\n\n  /* The scam block. It used to be appended LAST, 443px below the first portal\n     link on desktop and 2,714px below it on mobile, under links that all open in\n     a new tab \u2014 so the one panel here that protects a deposit was the one panel\n     nobody had scrolled to before they left. It is now the first thing rendered.\n     The four extra items come from the source this tool already cites: the\n     Westfaelische Hochschule rental-fraud sheet. */\n  var SAFETY =\n    '<div class=\"panel safety\"><h2>Read this before you look at any listing</h2>' +\n    '<div class=\"flag\"><p>Never pay for a place you have not seen, in person or on a live video call. ' +\n    'Never pay outside the website. Never pay by Western Union, MoneyGram, gift card or crypto. ' +\n    'The most common scam: a landlord who is \"abroad\" and wants a deposit before you get the keys. ' +\n    'If the rent is much lower than everything nearby, it is a trick to rush you. A room in central ' +\n    'Munich for \u20ac300 does not exist.</p>' +\n    '<ul>' +\n    '<li><strong>Check the first two letters of the bank account (IBAN) before you pay.</strong> A German ' +\n    'landlord\u2019s account starts with DE, a French one with FR, a Dutch one with NL. If rent for a Berlin ' +\n    'flat goes to a GB, PL or LT account, or to a \"relocation agent\", it is almost surely a scam.</li>' +\n    '<li><strong>Search the photos on Google Images, and look at the address on Street View.</strong> Scam ' +\n    'photos are usually copied from a real advert. If the same rooms appear in another city, or the building ' +\n    'does not match the photos, stop.</li>' +\n    '<li><strong>Never send passport or ID scans, or bank details, to someone you have not met.</strong> ' +\n    'A genuine landlord asks for documents at contract stage, not to \"reserve\" a viewing. The listing may be ' +\n    'bait for identity theft rather than for your deposit, and that costs more to undo than a lost month\u2019s rent.</li>' +\n    '<li><strong>Refuse viewing fees, reservation fees and holding deposits demanded before a contract.</strong> ' +\n    'This is the dominant shape in Ireland, the UK and Spain, where the flat is real and the \"agent\" is not: ' +\n    'a few hundred euros to \"hold\" a place you have not been offered in writing. If money must move before ' +\n    'there is a contract, get the terms and the refund conditions in writing first, and pay by card or bank ' +\n    'transfer so there is a trail.</li>' +\n    '<li><strong>If you have already paid.</strong> You are not the first and it is not your fault. Report it ' +\n    'to the local police, in person or online, and keep the reference \u2014 you will need it for everything ' +\n    'else. Tell your bank immediately and ask for a recall or chargeback; transfers can sometimes be stopped ' +\n    'within hours, card payments much later. Report the advert to the portal so it comes down. Keep every ' +\n    'message, listing screenshot and receipt. If you sent ID documents, tell your embassy and your bank that ' +\n    'they are compromised. And tell us or your university international office \u2014 both of us would rather ' +\n    'know than have you carry it alone.</li>' +\n    '</ul></div></div>';\n\n  function render(){\n    var h=H.find(function(x){return x.code===sel.value;});\n    var o=document.getElementById('hout');\n    if(!h){o.innerHTML='';return;}\n    var s=SAFETY;\n    if(h.typical_costs) s+='<div class=\"panel\"><h2>Typical rent</h2><p style=\"margin:0\">'+h.typical_costs+'</p></div>';\n    s+='<div class=\"panel\"><h2>Websites to search</h2>'+h.portals.map(function(p){\n      var stamp = p.checked\n        ? '<span class=\"chk\">link checked '+esc(p.checked)+'</span>'\n        : '<span class=\"chk warn\">Link not checked recently. '+esc(p.unverified||'')+'</span>';\n      return '<div class=\"portal\"><a href=\"'+p.url+'\" rel=\"noopener\" target=\"_blank\">'+p.name+'</a>'+\n             '<span class=\"n\">'+(p.note||'')+'</span>'+stamp+'</div>';}).join('')+'</div>';\n\n    if(h.status==='verified'&&h.rules&&h.rules.length){\n      s+='<div class=\"panel\"><h2>Local rules to know in '+h.country+'</h2>'+\n        h.rules.map(function(r){return '<div class=\"rule\"><h4>'+r.title+'</h4><p>'+r.body+\n          (r.link?' <a href=\"'+r.link+'\" rel=\"noopener\" target=\"_blank\">Open it</a>.':'')+'</p></div>';}).join('')+\n        '<div class=\"prov\" style=\"font-size:.78rem;color:var(--ink-faint);padding-top:11px;border-top:1px solid var(--rule)\">'+\n        h.sources.map(function(x){return x.cite+(x.url?'. <a href=\"'+x.url+'\" rel=\"noopener\" target=\"_blank\">Source</a>':'');}).join(' ')+\n        '. Checked '+h.checked_on+'.</div></div>';\n    } else {\n      s+='<div class=\"empty\"><p><strong>We have not checked the local rules for '+h.country+' yet.</strong> ' +\n        'The websites above are the main ones. Rules on deposits, guarantors, registration and local scams ' +\n        'are not here yet.</p>' +\n        '<p style=\"margin-bottom:0\">France and Germany are complete. For '+h.country+', ' +\n        '<a href=\"https://involve-consulting.com/contact-us/'+UTM+'housing-unsourced\">ask us directly</a> ' +\n        'and a person will answer.</p></div>';\n    }\n    o.innerHTML=s;\n    if(window.involveTrack) window.involveTrack('tool_complete',{tool:'housing',country:h.code});\n  }\n\n  sel.addEventListener('change',function(){\n    render();\n    var h=H.find(function(x){return x.code===sel.value;});\n    var w=document.getElementById('housingGateWrap');\n    w.hidden=!sel.value;\n    /* The gate used to promise \"the local rules and the scam patterns\" for a\n       country the page had just said it has no rules for. Say what will actually\n       arrive. */\n    if(h) document.getElementById('housingGateBlurb').textContent =\n      (h.status==='verified'&&h.rules&&h.rules.length)\n        ? 'The websites, local rules and scam warnings for ' + h.country + ', in one document. ' +\n          'Everything above stays free.'\n        : 'For ' + h.country + ' you get the website list and the scam checklist. The local rules are not ' +\n          'ready yet, so they are not included. Everything above stays free.';\n    if(sel.value&&window.involveGate&&!w.dataset.wired){\n      w.dataset.wired='1';\n      window.involveGate(document.getElementById('gateHousing'),{\n        tool:'housing', cta:'Email me the checklist',\n        payload:function(){return {country:sel.value};}\n      });\n    }\n  });\n\n  sel.innerHTML='<option value=\"\">Choose a country</option>'+H.map(function(h){\n    return '<option value=\"'+h.code+'\">'+h.country+(h.status==='verified'?'':' \u2014 websites only')+'</option>';}).join('');\n})();\n"}};
+var VIEWS = {"housing": {"title": "Housing finder", "html": "<div data-view=\"housing\"><div class=\"toolbar-strip\"><div class=\"wrap\"><span class=\"stamp is-unsourced\" id=\"hStamp\">Beta</span>\n<span id=\"hNote\">Links to each country's main rental websites. We earn no commission from any of them.</span></div></div><main class=\"wrap\">\n<div class=\"tool-head\">\n  <h1>Housing finder</h1>\n  <p class=\"lede\">Where students in each country really look for a flat, and the local rules you\n  need to know. Most students who lose a flat, or a deposit, lose it because nobody told them the rules.</p>\n</div>\n<div class=\"panel\">\n  <label for=\"hc\">Where are you going?</label>\n  <select id=\"hc\"></select>\n</div>\n<div id=\"hout\"></div>\n<div class=\"panel\" id=\"housingGateWrap\" hidden>\n  <h2>Get this by email</h2>\n  <p id=\"housingGateBlurb\">We will email you the rental websites for the country you picked, with a\n  link back to this page. Everything above stays free.</p>\n  <div id=\"gateHousing\"></div>\n</div>\n</main></div>", "js": "\n(function(){\n  var H=window.INVOLVE_HOUSING||[], sel=document.getElementById('hc');\n  var UTM='?utm_source=tools&utm_medium=housing&utm_campaign=';\n\n  /* The stamp used to be the literal string \"Ready\" in the markup, on a tool\n     with rules for 2 of 14 countries. Compute it, the way visa and visa-docs do,\n     so it cannot drift from the data again. */\n  var okRules=H.filter(function(h){return h.status==='verified'&&h.rules&&h.rules.length;});\n  var portals=H.reduce(function(a,h){return a.concat(h.portals||[]);},[]);\n  var unchecked=portals.filter(function(p){return !p.checked;}).length;\n  (function(){\n    var st=document.getElementById('hStamp');\n    if(okRules.length===H.length){st.className='stamp is-ready';st.textContent='Live';}\n    else{st.className='stamp is-unsourced';st.textContent='Beta';}\n    document.getElementById('hNote').textContent=\n      'Local rules for '+okRules.length+' of '+H.length+' countries so far. For the others we list '+\n      'rental websites only. We earn no commission from any of them.';\n  })();\n\n  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}\n\n  /* The scam block. It used to be appended LAST, 443px below the first portal\n     link on desktop and 2,714px below it on mobile, under links that all open in\n     a new tab \u2014 so the one panel here that protects a deposit was the one panel\n     nobody had scrolled to before they left. It is now the first thing rendered.\n     The four extra items come from the source this tool already cites: the\n     Westfaelische Hochschule rental-fraud sheet. */\n  var SAFETY =\n    '<div class=\"panel safety\"><h2>Read this before you look at any listing</h2>' +\n    '<div class=\"flag\"><p>Never pay for a place you have not seen, in person or on a live video call. ' +\n    'Never pay outside the website. Never pay by Western Union, MoneyGram, gift card or crypto. ' +\n    'The most common scam: a landlord who is \"abroad\" and wants a deposit before you get the keys. ' +\n    'If the rent is much lower than everything nearby, it is a trick to rush you. A room in central ' +\n    'Munich for \u20ac300 does not exist.</p>' +\n    '<ul>' +\n    '<li><strong>Check the first two letters of the bank account (IBAN) before you pay.</strong> A German ' +\n    'landlord\u2019s account starts with DE, a French one with FR, a Dutch one with NL. If rent for a Berlin ' +\n    'flat goes to a GB, PL or LT account, or to a \"relocation agent\", it is almost surely a scam.</li>' +\n    '<li><strong>Search the photos on Google Images, and look at the address on Street View.</strong> Scam ' +\n    'photos are usually copied from a real advert. If the same rooms appear in another city, or the building ' +\n    'does not match the photos, stop.</li>' +\n    '<li><strong>Never send passport or ID scans, or bank details, to someone you have not met.</strong> ' +\n    'A genuine landlord asks for documents at contract stage, not to \"reserve\" a viewing. The listing may be ' +\n    'bait for identity theft rather than for your deposit, and that costs more to undo than a lost month\u2019s rent.</li>' +\n    '<li><strong>Refuse viewing fees, reservation fees and holding deposits demanded before a contract.</strong> ' +\n    'This is the dominant shape in Ireland, the UK and Spain, where the flat is real and the \"agent\" is not: ' +\n    'a few hundred euros to \"hold\" a place you have not been offered in writing. If money must move before ' +\n    'there is a contract, get the terms and the refund conditions in writing first, and pay by card or bank ' +\n    'transfer so there is a trail.</li>' +\n    '<li><strong>If you have already paid.</strong> You are not the first and it is not your fault. Report it ' +\n    'to the local police, in person or online, and keep the reference \u2014 you will need it for everything ' +\n    'else. Tell your bank immediately and ask for a recall or chargeback; transfers can sometimes be stopped ' +\n    'within hours, card payments much later. Report the advert to the portal so it comes down. Keep every ' +\n    'message, listing screenshot and receipt. If you sent ID documents, tell your embassy and your bank that ' +\n    'they are compromised. And tell us or your university international office \u2014 both of us would rather ' +\n    'know than have you carry it alone.</li>' +\n    '</ul></div></div>';\n\n  function render(){\n    var h=H.find(function(x){return x.code===sel.value;});\n    var o=document.getElementById('hout');\n    if(!h){o.innerHTML='';return;}\n    var s=SAFETY;\n    if(h.typical_costs) s+='<div class=\"panel\"><h2>Typical rent</h2><p style=\"margin:0\">'+h.typical_costs+'</p></div>';\n    s+='<div class=\"panel\"><h2>Websites to search</h2>'+h.portals.map(function(p){\n      var stamp = p.checked\n        ? '<span class=\"chk\">link checked '+esc(p.checked)+'</span>'\n        : '<span class=\"chk warn\">Link not checked recently. '+esc(p.unverified||'')+'</span>';\n      return '<div class=\"portal\"><a href=\"'+p.url+'\" rel=\"noopener\" target=\"_blank\">'+p.name+'</a>'+\n             '<span class=\"n\">'+(p.note||'')+'</span>'+stamp+'</div>';}).join('')+'</div>';\n\n    if(h.status==='verified'&&h.rules&&h.rules.length){\n      s+='<div class=\"panel\"><h2>Local rules to know in '+h.country+'</h2>'+\n        h.rules.map(function(r){return '<div class=\"rule\"><h4>'+r.title+'</h4><p>'+r.body+\n          (r.link?' <a href=\"'+r.link+'\" rel=\"noopener\" target=\"_blank\">Open it</a>.':'')+'</p></div>';}).join('')+\n        '<div class=\"prov\" style=\"font-size:.78rem;color:var(--ink-faint);padding-top:11px;border-top:1px solid var(--rule)\">'+\n        h.sources.map(function(x){return x.cite+(x.url?'. <a href=\"'+x.url+'\" rel=\"noopener\" target=\"_blank\">Source</a>':'');}).join(' ')+\n        '. Checked '+h.checked_on+'.</div></div>';\n    } else {\n      s+='<div class=\"empty\"><p><strong>We have not checked the local rules for '+h.country+' yet.</strong> ' +\n        'The websites above are the main ones. Rules on deposits, guarantors, registration and local scams ' +\n        'are not here yet.</p>' +\n        '<p style=\"margin-bottom:0\">France and Germany are complete. For '+h.country+', ' +\n        '<a href=\"https://involve-consulting.com/contact-us/'+UTM+'housing-unsourced\">ask us directly</a> ' +\n        'and a person will answer.</p></div>';\n    }\n    o.innerHTML=s;\n    if(window.involveTrack) window.involveTrack('tool_complete',{tool:'housing',country:h.code});\n  }\n\n  sel.addEventListener('change',function(){\n    render();\n    var h=H.find(function(x){return x.code===sel.value;});\n    var w=document.getElementById('housingGateWrap');\n    w.hidden=!sel.value;\n    /* The gate used to promise \"the local rules and the scam patterns\" for a\n       country the page had just said it has no rules for. Say what will actually\n       arrive. */\n    if(h) document.getElementById('housingGateBlurb').textContent =\n      (h.status==='verified'&&h.rules&&h.rules.length)\n        ? 'We will email you the rental websites for ' + h.country + ', with a link back to this page ' +\n          'and its local rules and scam warnings. Everything above stays free.'\n        : 'We will email you the rental websites for ' + h.country + ', with a link back to this page. ' +\n          'Everything above stays free.';\n    if(sel.value&&window.involveGate&&!w.dataset.wired){\n      w.dataset.wired='1';\n      window.involveGate(document.getElementById('gateHousing'),{\n        tool:'housing', cta:'Email me this list',\n        payload:function(){return {country:sel.value};},\n        summary:function(){\n          var hh=H.find(function(x){return x.code===sel.value;});\n          if(!hh) return {};\n          var strip=function(t){return String(t||'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&');};\n          return {result:'Rental websites for '+strip(hh.country),\n                  top:(hh.portals||[]).slice(0,10).map(function(p){return strip(p.name)+' \u2014 '+p.url;})};\n        }\n      });\n    }\n  });\n\n  sel.innerHTML='<option value=\"\">Choose a country</option>'+H.map(function(h){\n    return '<option value=\"'+h.code+'\">'+h.country+(h.status==='verified'?'':' \u2014 websites only')+'</option>';}).join('');\n})();\n"}};
 /* Which view a bare URL, an unknown route or a stray in-page anchor lands on.
    'home' in the combined bundle. In a single-tool page there IS no home view,
    so the fallback is that tool: the page must never route to a view it does

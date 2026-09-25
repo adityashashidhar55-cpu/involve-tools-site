@@ -290,6 +290,26 @@ input[type=number] { font-family: var(--mono); }
   align-items: flex-start; max-width: 60ch; margin-bottom: 10px;
 }
 .gate-check input[type=checkbox] { width: auto; margin-top: 4px; flex: 0 0 auto; }
+/* "Get this by email" form (email-dev, 2026-09-25) */
+.igate { max-width: 660px; }
+.igate-h { margin: 0 0 6px; }
+.igate-intro { margin: 0 0 14px; max-width: 62ch; }
+.igate-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0 16px; }
+.igate-fields .field { margin-bottom: 12px; min-width: 0; }
+.igate-fields input { width: 100%; box-sizing: border-box; }
+.igate .gate-check span { overflow-wrap: anywhere; }
+.igate-privacy { max-width: 62ch; font-size: .8rem; margin: 6px 0 0; }
+.igate-actions { margin-top: 14px; }
+.igate-msg { margin-top: 12px; }
+.igate-msg .flag { max-width: 62ch; }
+.igate-again { margin-top: 12px; font-size: .85rem; padding: 7px 14px; }
+.igate [aria-invalid="true"] { border-color: #C0392B; box-shadow: 0 0 0 1px #C0392B; }
+.igate .gate-check input[aria-invalid="true"] { outline: 2px solid #C0392B; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .igate-fields { grid-template-columns: 1fr; }
+  .igate-actions .btn { width: 100%; }
+}
+@media print { .igate { display: none; } }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 .metric-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
@@ -1927,158 +1947,253 @@ window.INVOLVE_PAYLOAD_LABELS_BY_TOOL = {
    The two are stored SEPARATELY and mean different things. The first is the
    report the person asked for. The second is marketing, is optional, and
    leaving it unticked changes nothing about the first. */
+/* ---------------------------------------------------------------------------
+   THE EMAIL FORM ("Get this by email"). One component, used by every tool.
+
+   - It is shown AFTER the result. The tools stay free and work without it.
+   - Two tick boxes, stored separately:
+       1. "Email me this result."  Required, because it is what the form does.
+       2. Tips on deadlines and funding.  Optional, never ticked for you
+          (GDPR: marketing consent must be separate and unticked).
+   - The privacy line lists every field the form sends, built from the same
+     keys the tool puts in its payload, and that exact sentence is stored with
+     the consent record. Bump `version` whenever a sentence below changes.
+   - A tool may pass `summary()` returning { result: 'one line', top: [...] }.
+     This is a short summary of the result (numbers, school or country names),
+     never free text the person typed.
+   --------------------------------------------------------------------------- */
 window.INVOLVE_GATE_CONSENT = {
-  version: 'gate-2026-09-06.1',
-  report: 'Email me this report. One email, because I asked for it.',
-  marketing: 'Optional, and a separate decision: also send occasional notes about deadlines and ' +
-             'funding. Leave this unticked and you still get the report. One click unsubscribes, ' +
-             'and we do not pass your address to anyone.'
+  version: 'gate-2026-09-25.1',
+  report: 'Email me this result.',
+  marketing: 'Also send me occasional tips on deadlines and funding. (Optional. You can stop them at any time.)'
 };
 
+/* Labels for the keys added in this version. The old labels stay as they were. */
+(function () {
+  var L = window.INVOLVE_PAYLOAD_LABELS = window.INVOLVE_PAYLOAD_LABELS || {};
+  var add = {
+    result:     'a one-line summary of your result',
+    top:        'the main items in your result (for example school or country names)',
+    residence:  'the country you live in now',
+    noTestOnly: 'whether you ticked “no GMAT or GRE”',
+    tool_page:  'which page you used'
+  };
+  for (var k in add) { if (!L[k]) L[k] = add[k]; }
+})();
+
+window.__involveGateN = window.__involveGateN || 0;
+
 window.involveGate = function (mount, opts) {
+  if (!mount) return;
+  opts = opts || {};
   var CONSENT = window.INVOLVE_GATE_CONSENT;
   var byTool = (window.INVOLVE_PAYLOAD_LABELS_BY_TOOL || {})[opts.tool] || {};
-  var labels = window.INVOLVE_PAYLOAD_LABELS, listed = [];
-  try {
-    var p = opts.payload() || {};
-    for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) {
-      listed.push(byTool[k] || labels[k] || ('the value of “' + k + '”'));
-    } }
-  } catch (e) { listed = []; }
-  var sends = listed.length === 0 ? 'nothing else'
-            : listed.length === 1 ? listed[0]
-            : listed.slice(0, -1).join(', ') + ' and ' + listed[listed.length - 1];
+  var labels = window.INVOLVE_PAYLOAD_LABELS || {};
+  var uid = 'ig' + (++window.__involveGateN);
 
-  /* The disclosure sentence is built once, printed on screen, and stored with
-     the consent record, so what was promised and what is held are the same
-     string. It names every key this particular tool's payload contains. */
-  var disclosure = 'Tick the first box and this is the whole of what leaves your browser: your ' +
-                   'name, your email address, and ' + sends + '. Nothing else on this page is sent.';
+  /* Shorten to n characters without cutting a word in half (supervisor-email). */
+  function clip(v, n) {
+    v = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    if (v.length <= n) return v;
+    var cut = v.slice(0, n - 1), sp = cut.lastIndexOf(' ');
+    if (sp > n * 0.6) cut = cut.slice(0, sp);
+    return cut.replace(/[\s,;:.\u2014-]+$/, '') + '…';
+  }
 
-  /* A <form>, so Enter in the email field submits. Without it the single most
-     common form habit there is did nothing at all - no message, no feedback. */
+  /* What this form sends, in words. */
+  function keysNow() {
+    var keys = [];
+    try { var p = opts.payload ? (opts.payload() || {}) : {};
+          for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) keys.push(k); } catch (e) {}
+    if (opts.summary) {
+      /* Name only what the summary really holds. If it is not ready yet, name both (never too little). */
+      var sm = {}; try { sm = opts.summary() || {}; } catch (e) {}
+      var hasR = !!sm.result, hasT = !!(sm.top && sm.top.filter(Boolean).length);
+      if ((hasR || !hasT) && keys.indexOf('result') < 0) keys.push('result');
+      if ((hasT || !hasR) && keys.indexOf('top') < 0) keys.push('top');
+    }
+    return keys;
+  }
+  function disclosureFor(keys) {
+    var listed = keys.map(function (k) { return byTool[k] || labels[k] || ('the value of “' + k + '”'); });
+    var sends = listed.length === 0 ? '' : listed.length === 1 ? ', and ' + listed[0]
+              : ', ' + listed.slice(0, -1).join(', ') + ' and ' + listed[listed.length - 1];
+    return 'What we send: your name, your email' + sends + '. Nothing else from this page. ' +
+           'We use it to send this email. We only send other emails if you tick the second box. ' +
+           'We never sell or share your email. To delete your details, write to contact@involve-consulting.com.';
+  }
+  var disclosure = disclosureFor(keysNow());
+
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
   mount.innerHTML =
-    '<form novalidate id="gForm">' +
-    '<div class="field" style="max-width:400px"><label for="gName">Your name</label>' +
-    '<input type="text" id="gName" autocomplete="name"></div>' +
-    '<div class="field" style="max-width:400px"><label for="gEmail">Email address</label>' +
-    '<input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com"></div>' +
-    '<label class="gate-check"><input type="checkbox" id="gConsent">' +
-    '<span>' + CONSENT.report + '</span></label>' +
-    '<label class="gate-check"><input type="checkbox" id="gMarketing">' +
-    '<span>' + CONSENT.marketing + '</span></label>' +
-    '<p class="hint" style="max-width:60ch">' + disclosure + '</p>' +
-    '<div style="margin-top:14px"><button class="btn" type="submit" id="gSend">' +
-      (opts.cta || 'Email me the report') + '</button></div>' +
-    /* role=alert + aria-live, because every validation error and the whole
-       "not connected yet" message used to be injected in silence. */
-    '<div id="gMsg" role="alert" aria-live="assertive" aria-atomic="true" style="margin-top:12px"></div>' +
+    '<form class="igate" novalidate>' +
+    (opts.heading ? '<h3 class="igate-h">' + esc(opts.heading) + '</h3>' : '') +
+    (opts.intro ? '<p class="igate-intro">' + esc(opts.intro) + '</p>' : '') +
+    '<div class="igate-body">' +
+      '<div class="igate-fields">' +
+        '<div class="field"><label for="' + uid + 'n">Your name</label>' +
+        '<input type="text" id="' + uid + 'n" data-g="name" autocomplete="name" maxlength="200"></div>' +
+        '<div class="field"><label for="' + uid + 'e">Your email</label>' +
+        '<input type="email" id="' + uid + 'e" data-g="email" autocomplete="email" inputmode="email" ' +
+        'maxlength="200" placeholder="name@example.com"></div>' +
+      '</div>' +
+      '<label class="gate-check"><input type="checkbox" data-g="consent"><span>' + esc(CONSENT.report) + '</span></label>' +
+      '<label class="gate-check"><input type="checkbox" data-g="marketing"><span>' + esc(CONSENT.marketing) + '</span></label>' +
+      '<p class="hint igate-privacy" data-g="privacy">' + esc(disclosure) + '</p>' +
+      '<div class="igate-actions"><button class="btn" type="submit" data-g="send">' +
+        esc(opts.cta || 'Email me this result') + '</button></div>' +
+    '</div>' +
+    '<div class="igate-msg" data-g="msg" aria-live="polite"></div>' +
     '</form>';
 
-  var form = mount.querySelector('#gForm');
-  var btn = mount.querySelector('#gSend');
+  var form = mount.querySelector('form');
+  function q(n) { return mount.querySelector('[data-g="' + n + '"]'); }
+  var btn = q('send'), body = mount.querySelector('.igate-body');
   var sending = false;
+  /* The result can change after the form is drawn: keep the privacy line true. */
+  form.addEventListener('focusin', function () {
+    disclosure = disclosureFor(keysNow()); q('privacy').textContent = disclosure;
+  });
 
-  /* Never build a message by concatenating an address into innerHTML. The
-     validating regex excludes '@' and whitespace and nothing else, so '<', '>'
-     and '"' all pass it, and a real <svg> element built from user input was
-     reproducible on the two live-endpoint branches. */
-  function say(cls, nodes) {
-    var msg = mount.querySelector('#gMsg');
+  /* Messages are built with text nodes only, never by putting what someone
+     typed into innerHTML. */
+  function say(kind, parts, extraBtn) {
+    var msg = q('msg');
     msg.textContent = '';
     var box = document.createElement('div');
-    box.className = cls;
+    box.className = kind === 'good' ? 'flag good' : kind === 'wait' ? 'hint' : 'flag';
+    if (kind === 'bad') box.setAttribute('role', 'alert');
     var para = document.createElement('p');
-    nodes.forEach(function (n) { para.appendChild(typeof n === 'string' ? document.createTextNode(n) : n); });
+    para.style.margin = '0';
+    parts.forEach(function (n) {
+      if (typeof n === 'string') para.appendChild(document.createTextNode(n));
+      else { var b = document.createElement('strong'); b.textContent = n.b; para.appendChild(b); }
+    });
     box.appendChild(para);
+    if (extraBtn) {
+      var again = document.createElement('button');
+      again.type = 'button'; again.className = 'btn btn-quiet igate-again';
+      again.textContent = 'Send to a different email';
+      again.addEventListener('click', function () {
+        body.hidden = false; q('msg').textContent = ''; q('email').focus();
+      });
+      box.appendChild(again);
+    }
     msg.appendChild(box);
   }
-  function strong(t) { var e = document.createElement('strong'); e.textContent = t; return e; }
+  function bad(field, text) {
+    ['name', 'email', 'consent'].forEach(function (f) { q(f).removeAttribute('aria-invalid'); });
+    if (field) { q(field).setAttribute('aria-invalid', 'true'); q(field).focus(); }
+    say('bad', [text]);
+  }
 
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
-    if (sending) return;                       /* three rapid clicks used to fire three POSTs */
-    var name = mount.querySelector('#gName').value.trim();
-    var email = mount.querySelector('#gEmail').value.trim();
-    if (!name) { say('flag', ['Enter your name.']); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      say('flag', ['That does not look like an email address.']); return; }
-    if (!mount.querySelector('#gConsent').checked) {
-      say('flag', ['Tick the first box so we know we may email you the report. The second box is ' +
-                   'optional and you can leave it alone.']); return; }
+    if (sending) return;
+    var name = q('name').value.trim();
+    var email = q('email').value.trim();
+    if (!name) { bad('name', 'Please type your name.'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email) || email.length > 200) {
+      bad('email', 'Please check your email address. It should look like name@example.com.'); return; }
+    if (!q('consent').checked) {
+      bad('consent', 'Please tick “' + CONSENT.report + '” so we can send it. The second box is optional.'); return; }
+    ['name', 'email', 'consent'].forEach(function (f) { q(f).removeAttribute('aria-invalid'); });
 
+    /* The payload: the tool's facts plus its short result summary. */
+    var payload = {};
+    try { payload = opts.payload ? (opts.payload() || {}) : {}; } catch (e) { payload = {}; }
+    if (opts.summary) {
+      try {
+        var sm = opts.summary() || {};
+        if (sm.result) payload.result = clip(sm.result, 200);
+        if (sm.top && sm.top.length) payload.top = sm.top.filter(Boolean).slice(0, 10).map(function (x) { return clip(x, 160); });
+      } catch (e) {}
+    }
+    disclosure = disclosureFor(keysNow());
+    q('privacy').textContent = disclosure;
+
+    var marketing = q('marketing').checked;
     sending = true;
     btn.disabled = true;
     var wasLabel = btn.textContent;
     btn.textContent = 'Sending…';
-    mount.querySelector('#gMsg').textContent = '';
-    var hint = document.createElement('p');
-    hint.className = 'hint';
-    hint.textContent = 'Sending…';
-    mount.querySelector('#gMsg').appendChild(hint);
-    window.involveTrack('gate_submit', { tool: opts.tool, marketing: mount.querySelector('#gMarketing').checked });
+    say('wait', ['Sending…']);
+    if (window.involveTrack) window.involveTrack('gate_submit', { tool: opts.tool, marketing: marketing });
 
     function done() { sending = false; btn.disabled = false; btn.textContent = wasLabel; }
+    var onPage = opts.onPage ? String(opts.onPage) : '';
+    var what = opts.summary ? 'a summary' : 'a link back to this page';
 
-    window.involveCapture({ name: name, email: email, tool: opts.tool,
-                            marketing: mount.querySelector('#gMarketing').checked,
-                            /* The consent record travels with the submission:
-                               the version, the sentence beside the box that was
-                               ticked, and the list of fields this gate promised
-                               to send. The endpoint stores each separately. */
+    window.involveCapture({ name: name, email: email, tool: opts.tool, marketing: marketing,
                             consent: true,
                             consent_version: CONSENT.version,
                             consent_text: CONSENT.report + ' ' + disclosure,
                             marketing_text: CONSENT.marketing,
-                            source_url: String(location.href).split('?')[0],
-                            payload: opts.payload() })
+                            source_url: String(location.href).split('?')[0].split('#')[0] +
+                                        (location.hash && location.hash.indexOf('#/') === 0 ? location.hash.split('?')[0] : ''),
+                            payload: payload })
       .then(function (res) {
         done();
+        res = res || {};
         if (res.suppressed) {
-          /* On the do-not-contact list. Nothing was stored, and saying "on its
-             way" to somebody who has asked us to stop would be the worst
-             possible answer. */
-          say('flag', [String(res.message || 'That address is on our do-not-contact list, so ' +
-                              'nothing was stored and nothing will be sent.')]);
+          say('bad', ['This email address asked us not to contact it, so we saved nothing. ' +
+                      'If this is a mistake, write to contact@involve-consulting.com.']);
         } else if (res.duplicate) {
-          say('flag', ['This report has already been requested for ', email,
-                       '. Check that inbox, including spam. We send one per address per tool, so ' +
-                       'using another tool here still gets you its own email.']);
-        } else if (res.email_sent === false) {
-          /* Stored, consented, and NOT emailed - because a secret the owner has
-             to supply is missing. Print the endpoint's own sentence, which names
-             the secret. The alternative is "On its way" over an email that will
-             never arrive, which is the exact failure this build refuses to
-             repeat. */
-          say('flag', [strong('Saved, but not emailed yet.'), ' ',
-                       String(res.message || 'The report could not be emailed. We can see this ' +
-                              'and will send it by hand: contact@involve-consulting.com.')]);
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We already had your request, so we will not email you twice.']
+                             : [{ b: 'We already have this request.' }, ' We will not email ' + email +
+                                ' twice. Please check your inbox and spam folder.'], true);
+        } else if (res.email_sent === true) {
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We have also emailed ' + what + ' to ' + email + '.']
+                             : [{ b: 'Done.' }, ' We have emailed this to ' + email + '. If you can’t find it, check your spam folder.'], true);
+        } else if (res.stored) {
+          /* Saved, and queued: the email goes out as soon as sending is
+             switched on (the queue is retried every hour). */
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We will also email ' + what + ' to ' + email + '.']
+                             : [{ b: 'Thanks, ' + name + '.' }, ' We have got your details. Your result will reach ' +
+                                email + ' soon. If you can’t find it, check your spam folder.'], true);
         } else {
-          say('flag good', ['On its way to ', email, '.']);
+          say('bad', [String(res.message || 'Sorry, that did not work. Please try again, or write to contact@involve-consulting.com.')]);
         }
         if (opts.onSent) opts.onSent(res);
       })
       .catch(function (e) {
         done();
         if (e && e.notWired) {
-          say('flag', [strong('Not connected yet.'),
-                       ' This form is not working yet. Nothing was sent or saved. ' +
-                       'Please email contact@involve-consulting.com instead.']);
+          say('bad', ['Email is not working on this page right now, so nothing was sent. ' +
+                      'Please write to contact@involve-consulting.com.']);
+        } else if (e && e.offline) {
+          say('bad', ['We could not connect, so nothing was sent. Check your internet and try again.']);
+        } else if (e && e.rate_limited) {
+          /* The server says which limit was hit (this connection, this address, or the whole day). */
+          say('bad', [String(e.message || 'Too many requests from this connection. Nothing was saved. Please try again in an hour.')]);
         } else if (e && e.message) {
-          /* The endpoint names what happened and whether anything was stored -
-             a bad address, the rate limit, a refusal. Pass it through: a
-             message somebody can act on beats "that did not send". */
-          say('flag', [String(e.message)]);
+          say('bad', [String(e.message)]);
         } else {
-          say('flag', ['That did not send. Please try again, or email us at ' +
-                       'contact@involve-consulting.com.']);
+          say('bad', ['Sorry, that did not work. Nothing was saved. Please try again, or write to ' +
+                      'contact@involve-consulting.com.']);
         }
+        if (opts.onFail) { try { opts.onFail(e || {}); } catch (x) {} }
       });
   });
 };
+
+/* Small helper for tools: the visible text of the first match, cut short. */
+window.involveText = function (sel, root, n) {
+  try {
+    var el = (root || document).querySelector(sel);
+    if (!el) return '';
+    var t = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+    n = n || 200;
+    return t.length > n ? t.slice(0, n - 1) + '…' : t;
+  } catch (e) { return ''; }
+};
 </script>
 <script>
-var VIEWS = {"country": {"title": "Which country actually suits you?", "html": "<div data-view=\"country\"><div class=\"toolbar-strip\"><div class=\"wrap\"><span class=\"stamp is-ready\" id=\"cpStamp\">Live</span>\n<span id=\"cpNote\">Ranks 16 countries against your own budget and your own course. Nothing is uploaded.</span></div></div><main class=\"wrap\">\n<div class=\"tool-head\">\n  <h1>Which country actually suits you?</h1>\n  <p class=\"lede\">Many students choose a country first and learn about the visa later. This tool starts\n  with you: your course, your budget in rupees, and how much you want to work there after you study. It\n  ranks 16 countries and shows, on every row, why each one moved up or down.</p>\n</div>\n\n<div class=\"panel\">\n  <h2>What you are looking for</h2>\n  <p class=\"cp-legend\">Five questions.</p>\n  <div class=\"cp-grid\">\n    <div class=\"field\">\n      <label for=\"cpDeg\">Which degree do you want?</label>\n      <select id=\"cpDeg\"></select>\n    </div>\n    <div class=\"field\">\n      <label for=\"cpBudget\">Your total tuition budget, in rupees</label>\n      <input type=\"number\" id=\"cpBudget\" min=\"0\" step=\"100000\" placeholder=\"e.g. 4000000\">\n      <p class=\"hint\" id=\"cpBudgetEcho\">Tuition fees only. Type the full amount, for example 4000000 for \u20b940 lakh. Living costs, visa fees and flights are not included.</p>\n    </div>\n  </div>\n  <div class=\"cp-grid\">\n    <div class=\"field\">\n      <label for=\"cpStay\">How much does staying on to work after the course matter?</label>\n      <select id=\"cpStay\">\n        <option value=\"2\">A lot \u2014 it is most of why I am going</option>\n        <option value=\"1\" selected>Somewhat \u2014 I would like the option</option>\n        <option value=\"0\">Not at all \u2014 I am coming straight home</option>\n      </select>\n    </div>\n    <div class=\"field\">\n      <label for=\"cpTest\">Do you want to avoid taking a GMAT or GRE?</label>\n      <select id=\"cpTest\">\n        <option value=\"1\" selected>Yes \u2014 weight countries with more no-test programmes</option>\n        <option value=\"0\">No \u2014 I will sit a test</option>\n      </select>\n    </div>\n  </div>\n  <div class=\"field\">\n    <label for=\"cpEng\">Do you need the course taught in English?</label>\n    <select id=\"cpEng\">\n      <option value=\"1\" selected>Yes</option>\n      <option value=\"0\">It does not matter</option>\n    </select>\n    <p class=\"hint\">We count a programme as taught in English if it asks for an IELTS or TOEFL score. If it\n    asks for neither, we do not count it either way.</p>\n  </div>\n  <div style=\"margin-top:6px\"><button class=\"btn\" type=\"button\" id=\"cpGo\">Rank the 16 countries</button></div>\n  <div id=\"cpErr\" role=\"alert\" aria-live=\"polite\" style=\"margin-top:12px\"></div>\n</div>\n\n<div id=\"cpOut\"></div>\n\n<div class=\"panel\" id=\"cpGateWrap\" hidden>\n  <h2>Email me this ranking</h2>\n  <p>The ranked list with the reasoning on every row, plus each country\u2019s post-study work rule and its government\n  source link. Everything above stays free either way.</p>\n  <div id=\"cpGate\"></div>\n</div>\n</main></div>", "js": "\n(function(){\n'use strict';\nvar SCHOOLS = window.INVOLVE_SCHOOLS || [];\nvar COUNTRIES = window.INVOLVE_COUNTRIES || [];\n\nfunction esc(s){ return String(s==null?'':s)\n  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }\nvar NP = '<span class=\"cp-np\">not published</span>';\n\n/* ---------------------------------------------------------------------------\n   The one thing on this page that is not read out of a source: the exchange\n   rates. There is no rate feed here, because there are no external requests on\n   this site at all. These are fixed by hand, they carry the date they were set,\n   and they are printed on screen so a number you disagree with is a number you\n   can see. Everything else \u2014 tuition, test policy, visa length \u2014 comes out of\n   the data files.\n   ------------------------------------------------------------------------ */\nvar FX_SET_ON = '2026-09-06';\nvar FX = { INR:1, USD:88, EUR:96, GBP:113, CAD:63, AUD:57, NZD:51, CHF:103, SGD:66,\n           AED:24, HKD:11.3, SEK:8.8, NOK:8.4, DKK:12.9, JPY:0.57, CNY:12.3, RMB:12.3,\n           MYR:20, KRW:0.062, PLN:22.6, ZAR:4.9, QAR:24, SAR:23.5, TRY:2.2,\n           COP:0.022, KES:0.68 };\n\n/* countries.js is keyed by code; schools.js stores the country as a display\n   string. One map, declared once, rather than a fuzzy match. */\nvar CODE_TO_SCHOOL_COUNTRY = {\n  UK:'UK', DE:'Germany', US:'US', CA:'Canada', FR:'France', NL:'Netherlands',\n  IE:'Ireland', SG:'Singapore', AU:'Australia', ES:'Spain', IT:'Italy',\n  CH:'Switzerland', AE:'UAE', HK:'Hong Kong', SE:'Sweden', NZ:'New Zealand'\n};\n\nfunction inr(v, cur){\n  if(v==null||isNaN(v)) return null;\n  var r = FX[cur];\n  if(r==null) return null;\n  return v*r;\n}\nfunction rupees(n){\n  if(n==null||isNaN(n)) return null;\n  n=Math.round(n);\n  if(n>=10000000) return '\u20b9'+(n/10000000).toFixed(2).replace(/\\.00$/,'')+' Cr';\n  if(n>=100000)   return '\u20b9'+(n/100000).toFixed(1).replace(/\\.0$/,'')+' L';\n  return '\u20b9'+n.toLocaleString('en-IN');\n}\nfunction median(arr){\n  if(!arr.length) return null;\n  var a=arr.slice().sort(function(x,y){return x-y;});\n  var m=Math.floor(a.length/2);\n  return a.length%2 ? a[m] : (a[m-1]+a[m])/2;\n}\n\n/* the degree menu, built from the data rather than typed out */\n(function(){\n  var counts={};\n  SCHOOLS.forEach(function(s){ if(s.degree_type) counts[s.degree_type]=(counts[s.degree_type]||0)+1; });\n  var names=Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; });\n  document.getElementById('cpDeg').innerHTML =\n    '<option value=\"\">Any of them</option>' +\n    names.map(function(n){ return '<option value=\"'+esc(n)+'\">'+esc(n)+' ('+counts[n]+' programmes)</option>'; }).join('');\n})();\n\ndocument.getElementById('cpBudget').addEventListener('input', function(){\n  var v=parseFloat(this.value);\n  document.getElementById('cpBudgetEcho').textContent = (isNaN(v)||v<=0)\n    ? 'Tuition fees only. Type the full amount, for example 4000000 for \u20b940 lakh. Living costs, visa fees and flights are not included.'\n    : 'That is ' + rupees(v) + '. Tuition fees only. Living costs, visa fees and flights are not included.';\n});\n\n/* ---------------------------------------------------------------------------\n   The five components. Each one is a number between 0 and 1, each one is shown\n   on the row with the raw figure behind it, and each one carries a weight that\n   comes from the user's own answers. A component with no data is not scored as\n   zero: it is dropped, its weight is dropped with it, and the row says so.\n   ------------------------------------------------------------------------ */\nfunction profileWeights(p){\n  return {\n    choice:  1,\n    money:   p.budget>0 ? 2 : 0,\n    notest:  p.avoidTest ? 2 : 0,\n    psw:     p.stay===2 ? 2.5 : p.stay===1 ? 1 : 0,\n    pr:      p.stay===2 ? 1.5 : p.stay===1 ? 0.5 : 0,\n    english: p.needEnglish ? 1 : 0\n  };\n}\n\nfunction analyse(c, p){\n  var label = CODE_TO_SCHOOL_COUNTRY[c.code];\n  var matched = SCHOOLS.filter(function(s){\n    if((s.countries||[]).indexOf(label)<0) return false;\n    if(p.degree && s.degree_type!==p.degree) return false;\n    return true;\n  });\n  var priced = matched.filter(function(s){ return s.tuition!=null && inr(s.tuition, s.tuition_currency)!=null; });\n  var pricedInr = priced.map(function(s){ return inr(s.tuition, s.tuition_currency); });\n  var med = median(pricedInr);\n  var affordable = p.budget>0 ? pricedInr.filter(function(v){ return v<=p.budget; }).length : 0;\n  var noTest = matched.filter(function(s){ return s.test_policy==='not_required'; }).length;\n  var waivable = matched.filter(function(s){ return s.test_policy==='waiver'||s.test_policy==='optional'||s.test_policy==='alternative'; }).length;\n  var english = matched.filter(function(s){ return !!s.english_requirements; }).length;\n\n  var lvl = (c.duration_by_level&&c.duration_by_level.masters!=null) ? c.duration_by_level.masters : c.duration_months;\n\n  var comp = {};\n  comp.choice = matched.length ? Math.min(matched.length/30, 1) : 0;\n  comp.money  = (p.budget>0 && priced.length) ? affordable/priced.length : null;\n  comp.notest = matched.length ? noTest/matched.length : null;\n  comp.psw    = (lvl==null) ? null : Math.min(lvl/36, 1) * (c.job_offer_required ? 0.5 : 1);\n  comp.pr     = (c.leads_to_pr===null||c.leads_to_pr===undefined) ? null : (c.leads_to_pr ? 1 : 0);\n  comp.english= matched.length ? english/matched.length : null;\n\n  var w = profileWeights(p), num=0, den=0, dropped=[];\n  Object.keys(w).forEach(function(k){\n    if(!w[k]) return;\n    if(comp[k]==null){ dropped.push(k); return; }\n    num += comp[k]*w[k]; den += w[k];\n  });\n\n  return {\n    c:c, label:label, matched:matched.length, priced:priced.length, medianInr:med,\n    affordable:affordable, noTest:noTest, waivable:waivable, english:english,\n    pswMonths:lvl, comp:comp, weights:w, dropped:dropped,\n    score: den ? Math.round(num/den*100) : 0, den:den\n  };\n}\n\nfunction rankAll(p){\n  return COUNTRIES.map(function(c){ return analyse(c,p); })\n                  .sort(function(a,b){ return b.score-a.score || b.matched-a.matched; });\n}\n\n/* ---------------------------------------------------------------------------\n   What would change the answer. The ranking is recomputed at a series of larger\n   budgets and the first place where two countries actually swap is reported,\n   with the budget that does it. If nothing swaps at three times the budget, it\n   says that instead of inventing a threshold.\n   ------------------------------------------------------------------------ */\nfunction whatWouldChange(p, ranked){\n  if(!(p.budget>0)) return 'Tell us a budget and this line will tell you what a bigger one would buy you.';\n  var basePos={};\n  ranked.forEach(function(r,i){ basePos[r.c.code]=i; });\n  var steps=[1.1,1.25,1.5,1.75,2,2.5,3], best=null;\n  for(var i=0;i<steps.length;i++){\n    var p2={}; Object.keys(p).forEach(function(k){p2[k]=p[k];});\n    p2.budget = p.budget*steps[i];\n    var r2 = rankAll(p2);\n    for(var j=0;j<r2.length;j++){\n      var was = basePos[r2[j].c.code];\n      if(was==null || was<=j) continue;\n      var passed = ranked[j];\n      if(!passed || passed.c.code===r2[j].c.code) continue;\n      /* Prefer the swap nearest the top of the list: a country moving from 14th\n         to 13th is true but useless, and the smallest budget step is not\n         automatically the most informative one. */\n      if(!best || j<best.j) best={j:j, was:was, budget:p2.budget, moved:r2[j].c.name, passed:passed.c.name};\n      break;\n    }\n    if(best && best.j<3) break;\n  }\n  if(best){\n    return 'If your budget were ' + rupees(best.budget - p.budget) + ' higher \u2014 ' + rupees(best.budget) +\n           ' in total \u2014 ' + best.moved + ' would move up from ' + (best.was+1) + ' to ' + (best.j+1) +\n           ', passing ' + best.passed + '. The extra money only means more of that ' +\n           'country\u2019s programmes fit your budget. Nothing else in the ranking changes.';\n  }\n  return 'Tripling your budget does not change the order at all. On the figures we hold, money is not what is ' +\n         'separating these countries for you \u2014 the post-study work rules and how many programmes exist are.';\n}\n\nvar COMP_LABEL = {\n  choice:  'Programmes for your degree',\n  money:   'Fees within your budget',\n  notest:  'Need no GMAT or GRE',\n  psw:     'Time you can stay and work after study',\n  pr:      'Can lead to permanent residence',\n  english: 'Ask for IELTS or TOEFL (taught in English)'\n};\n\nfunction bar(k, r){\n  var v=r.comp[k], w=r.weights[k];\n  if(!w) return '';\n  var raw;\n  if(k==='choice')  raw = r.matched + ' programme' + (r.matched===1?'':'s');\n  else if(k==='money')  raw = (r.priced ? r.affordable+' of '+r.priced+' with a published fee \u00b7 typical fee '+(r.medianInr==null?'not published':rupees(r.medianInr)) : 'no published fees');\n  else if(k==='notest') raw = r.noTest+' of '+r.matched+' \u00b7 '+r.waivable+' more where it is optional or can be waived';\n  else if(k==='psw')    raw = (r.pswMonths==null ? 'not published' : r.pswMonths+' months' + (r.c.job_offer_required?' \u00b7 job offer needed':''));\n  else if(k==='pr')     raw = (r.c.leads_to_pr===null||r.c.leads_to_pr===undefined) ? 'not published'\n                            : (r.c.leads_to_pr ? ('yes'+(r.c.pr_after_years?', after '+r.c.pr_after_years+' year'+(r.c.pr_after_years===1?'':'s'):'')) : 'no');\n  else raw = r.english+' of '+r.matched;\n\n  var val = (v==null)\n    ? '<span class=\"cp-bv np\">not scored \u2014 ' + esc(raw) + '</span>'\n    : '<span class=\"cp-bv\">' + Math.round(v*100) + ' / 100 &times; weight ' + w + '</span>';\n  var track = (v==null) ? '' : '<div class=\"cp-track\"><div class=\"cp-fill\" style=\"width:'+Math.round(v*100)+'%\"></div></div>';\n  return '<div class=\"cp-bar\"><span class=\"cp-bk\">'+esc(COMP_LABEL[k])+' \u2014 '+esc(raw)+'</span>'+val+track+'</div>';\n}\n\nfunction rowHtml(r, i){\n  var c=r.c;\n  var h='<div class=\"cp-rank'+(i===0?' top':'')+'\">';\n  h+='<div class=\"cp-top\"><span class=\"cp-pos\">'+(i+1)+'</span><span class=\"cp-name\">'+esc(c.name)+'</span>'+\n     '<span class=\"cp-score\">'+r.score+' / 100</span></div>';\n  h+='<div class=\"cp-bars\">'+['choice','money','notest','psw','pr','english'].map(function(k){return bar(k,r);}).join('')+'</div>';\n  if(r.dropped.length){\n    h+='<p class=\"cp-psw\"><strong>Not scored for '+esc(c.name)+':</strong> '+\n       esc(r.dropped.map(function(k){return COMP_LABEL[k].toLowerCase();}).join('; '))+\n       '. We have no figure for this, so we left it out and scored the other parts. We did not count it as zero, because that would be unfair to this country.</p>';\n  }\n  h+='<p class=\"cp-psw\"><strong>'+esc(c.route)+'.</strong> '+esc(c.duration_note||'')+'</p>';\n  h+='<details class=\"cp-src\"><summary>The rest of the rule, and where we read it</summary><div class=\"cp-quote\">'+\n     '<p><strong>What you may do on it.</strong> '+esc(c.work_restrictions||'Not published.')+'</p>'+\n     '<p><strong>What you switch onto.</strong> '+esc(c.switch_route||'Not published.')+\n     (c.switch_salary_threshold ? ' Salary floor: '+esc(c.switch_salary_threshold.currency+' '+c.switch_salary_threshold.amount+' a '+c.switch_salary_threshold.period+' ('+c.switch_salary_threshold.year+')')+'. '+esc(c.switch_salary_threshold.note||'') : '')+'</p>'+\n     '<p><strong>Permanent residence.</strong> '+esc(c.pr_note||'Not published.')+'</p>'+\n     '<p><strong>When you must apply.</strong> '+esc(c.apply_deadline||'Not published.')+'</p>'+\n     '<p><strong>Known costs.</strong> '+esc(c.known_costs||'Not published.')+'</p>'+\n     (c.india_watch_out?'<p><strong>Read this if you are applying from India.</strong> '+esc(c.india_watch_out)+'</p>':'')+\n     '<p>'+esc(c.source||'')+'. Checked '+esc(c.checked_on||'not dated')+'. '+\n     (c.source_url?'<a href=\"'+esc(c.source_url)+'\" rel=\"noopener\" target=\"_blank\">'+esc(c.source_url)+'</a>':'')+'</p>'+\n     (c.needs_official_confirmation?'<p><strong>This record is flagged as needing official confirmation.</strong> Treat its figures as provisional and check the source before you rely on them.</p>':'')+\n     '</div></details>';\n  h+='</div>';\n  return h;\n}\n\nvar LAST=null;\n\nfunction waLink(number, p, ranked){\n  var top=ranked.slice(0,3).map(function(r,i){ return (i+1)+') '+r.c.name+' ('+r.score+'/100, '+r.matched+' programmes'+\n    (r.pswMonths==null?', post-study work not published':', '+r.pswMonths+' months post-study work')+')'; }).join('; ');\n  var txt='Hello Involve. I used the country picker on your tools site. I am looking at '+\n    (p.degree||'any business master\u2019s')+', with a tuition budget of '+(p.budget>0?rupees(p.budget):'no budget entered')+'. '+\n    'Staying on to work matters '+(p.stay===2?'a lot':p.stay===1?'somewhat':'not at all')+', I '+\n    (p.avoidTest?'would rather avoid a GMAT or GRE':'am willing to sit a GMAT or GRE')+', and I '+\n    (p.needEnglish?'need the course taught in English':'do not mind the language of instruction')+'. '+\n    'It ranked: '+top+'. I would like help deciding.';\n  return 'https://wa.me/'+number+'?text='+encodeURIComponent(txt);\n}\n\nfunction render(){\n  var deg=document.getElementById('cpDeg').value;\n  var bv=document.getElementById('cpBudget').value.trim();\n  var p={\n    degree: deg,\n    budget: bv===''?0:parseFloat(bv),\n    stay: parseInt(document.getElementById('cpStay').value,10),\n    avoidTest: document.getElementById('cpTest').value==='1',\n    needEnglish: document.getElementById('cpEng').value==='1'\n  };\n  if(isNaN(p.budget)) p.budget=0;\n\n  var err=document.getElementById('cpErr');\n  if(bv!=='' && (p.budget<0 || (p.budget>0 && p.budget<100000) || p.budget>100000000)){\n    err.innerHTML='<div class=\"flag\"><p>'+(p.budget<0 ? 'The budget cannot be below zero.'\n      : p.budget<100000 ? 'That budget looks too small. Type the full amount in rupees. For \u20b940 lakh, type 4000000.'\n      : 'That budget looks too big. Type the full amount in rupees. For \u20b940 lakh, type 4000000.')+'</p></div>';\n    document.getElementById('cpOut').innerHTML='';\n    document.getElementById('cpGateWrap').hidden=true;\n    return;\n  }\n  var w=profileWeights(p), total=0;\n  Object.keys(w).forEach(function(k){ total+=w[k]; });\n  if(total<=1 && !p.budget){\n    err.innerHTML='<div class=\"flag\"><p>With no budget, no interest in staying on, no wish to avoid a test and no '+\n      'language requirement, the only thing left to rank on is how many programmes exist. Answer at least one of the '+\n      'other questions and this becomes a ranking rather than a head count.</p></div>';\n  } else { err.innerHTML=''; }\n\n  var ranked=rankAll(p);\n  LAST={p:p, ranked:ranked};\n\n  var scored=ranked.filter(function(r){return r.matched>0;});\n  var empty=ranked.filter(function(r){return r.matched===0;});\n\n  var h='';\n  h+='<div class=\"panel\"><h2>What you asked for, and what we had</h2>'+\n     '<div class=\"metric-row\"><span class=\"k\">Degree</span><span class=\"v\">'+esc(p.degree||'Any')+'</span></div>'+\n     '<div class=\"metric-row\"><span class=\"k\">Tuition budget</span><span class=\"v\">'+(p.budget>0?esc(rupees(p.budget)):'<span class=\"cp-np\">not given</span>')+'</span></div>'+\n     '<div class=\"metric-row\"><span class=\"k\">Countries ranked</span><span class=\"v\">'+ranked.length+'</span></div>'+\n     '<div class=\"metric-row\"><span class=\"k\">Countries with at least one matching programme</span><span class=\"v\">'+scored.length+'</span></div>'+\n     '</div>';\n\n  h+='<div class=\"panel\"><h2>What would change the answer</h2><p style=\"margin:0\">'+esc(whatWouldChange(p, ranked))+'</p></div>';\n\n  h+='<div class=\"panel\"><h2>The ranking</h2>'+\n     '<p class=\"cp-legend\">Each country gets a score out of 100. Each row shows what went into it, and how much '+\n     'your answers made each part count. A part with no data is left out, not scored as zero.</p>'+\n     scored.map(rowHtml).join('') +\n     (empty.length ? '<div class=\"empty\"><p><strong>No matching programmes at all in '+\n        esc(empty.map(function(r){return r.c.name;}).join(', '))+'.</strong> This is a gap in our data for this degree, not a verdict on those countries. Their work rules '+\n        'after study are in the visa tool.</p></div>' : '') +\n     '</div>';\n\n  h+='<div class=\"panel\"><h2>How we worked this out</h2>'+\n     '<p>Programme numbers, fees and test rules come from our programme list. Work rights after study come from '+\n     '<strong>'+COUNTRIES.length+' government websites, each with the date we read it</strong>. If a number is not '+\n     'published, we leave that part out of the score instead of counting it as zero.</p>'+\n     '<p>Fees are changed into rupees at fixed rates we set on '+esc(FX_SET_ON)+': 1 US dollar = \u20b9'+FX.USD+\n     ', 1 euro = \u20b9'+FX.EUR+', 1 pound = \u20b9'+FX.GBP+', 1 Canadian dollar = \u20b9'+FX.CAD+', 1 Australian dollar = \u20b9'+FX.AUD+\n     ', 1 Swiss franc = \u20b9'+FX.CHF+', 1 Singapore dollar = \u20b9'+FX.SGD+'. We do not fetch live rates, so check '+\n     'today\u2019s rate before you decide.</p>'+\n     '<p>The typical fee is the middle fee of the programmes that publish one. Each row shows how many that is. '+\n     '\u201cNo test at all\u201d means the school asks for no test. Programmes where the test is optional or can be waived '+\n     'are counted separately.</p>'+\n     '<p>Visa rules change often. Each country shows the date we read its rules and a link to the page. Open '+\n     'the link before you choose a country.</p>'+\n     '</div>';\n\n  h+='<div class=\"panel\"><h2>Take this to a person</h2>'+\n     '<p>A ranking narrows your choice. It does not tell you if your profile is strong enough for the top '+\n     'country, or which country is best for the job you want. We can talk that through with you.</p>'+\n     '<div class=\"cp-wa\">'+\n     '<a class=\"btn\" href=\"'+esc(waLink('33749227373', p, ranked))+'\" rel=\"noopener\" target=\"_blank\">WhatsApp +33 7 49 22 73 73</a>'+\n     '<a class=\"btn\" href=\"'+esc(waLink('919769779615', p, ranked))+'\" rel=\"noopener\" target=\"_blank\">WhatsApp +91 97 69 77 96 15</a>'+\n     '<a class=\"btn ghost\" href=\"https://involve-consulting.com/contact-us/?utm_source=tools&amp;utm_medium=country-picker&amp;utm_campaign=result\" rel=\"noopener\" target=\"_blank\">Send it by form instead</a>'+\n     '</div>'+\n     '<p class=\"cp-note\">The WhatsApp buttons open your own WhatsApp with a message ready: what you asked '+\n     'for and your top three. Nothing is sent until you press send, and you can change the message first.</p></div>';\n\n  document.getElementById('cpOut').innerHTML=h;\n  document.getElementById('cpGateWrap').hidden=false;\n  if(window.involveTrack) window.involveTrack('tool_complete', {tool:'country-picker', matched:scored.length});\n}\n\ndocument.getElementById('cpGo').addEventListener('click', render);\n\nwindow.INVOLVE_PAYLOAD_LABELS_BY_TOOL = window.INVOLVE_PAYLOAD_LABELS_BY_TOOL || {};\nwindow.INVOLVE_PAYLOAD_LABELS_BY_TOOL['country-picker'] = {\n  degree:    'the degree you chose',\n  budget:    'the rupee tuition budget you entered',\n  stay:      'how much you said staying on to work matters',\n  avoidTest: 'whether you said you want to avoid a GMAT or GRE',\n  needEnglish:'whether you said you need the course taught in English',\n  countries: 'the country codes of your top five, in order',\n  matched:   'how many of the sixteen countries had a matching programme'\n};\n\n(function(){\n  var w=document.getElementById('cpGateWrap');\n  if(window.involveGate && !w.dataset.wired){\n    w.dataset.wired='1';\n    window.involveGate(document.getElementById('cpGate'), {\n      tool:'country-picker', cta:'Email me the ranking',\n      payload:function(){\n        var p=(LAST&&LAST.p)||{degree:'',budget:0,stay:1,avoidTest:true,needEnglish:true};\n        var r=(LAST&&LAST.ranked)||[];\n        return {degree:p.degree, budget:p.budget, stay:p.stay, avoidTest:p.avoidTest,\n                needEnglish:p.needEnglish,\n                countries:r.slice(0,5).map(function(x){return x.c.code;}),\n                matched:r.filter(function(x){return x.matched>0;}).length};\n      }\n    });\n  }\n})();\n})();\n"}};
+var VIEWS = {"country": {"title": "Which country actually suits you?", "html": "<div data-view=\"country\"><div class=\"toolbar-strip\"><div class=\"wrap\"><span class=\"stamp is-ready\" id=\"cpStamp\">Live</span>\n<span id=\"cpNote\">Ranks 16 countries against your own budget and your own course. Nothing is uploaded.</span></div></div><main class=\"wrap\">\n<div class=\"tool-head\">\n  <h1>Which country actually suits you?</h1>\n  <p class=\"lede\">Many students choose a country first and learn about the visa later. This tool starts\n  with you: your course, your budget in rupees, and how much you want to work there after you study. It\n  ranks 16 countries and shows, on every row, why each one moved up or down.</p>\n</div>\n\n<div class=\"panel\">\n  <h2>What you are looking for</h2>\n  <p class=\"cp-legend\">Five questions.</p>\n  <div class=\"cp-grid\">\n    <div class=\"field\">\n      <label for=\"cpDeg\">Which degree do you want?</label>\n      <select id=\"cpDeg\"></select>\n    </div>\n    <div class=\"field\">\n      <label for=\"cpBudget\">Your total tuition budget, in rupees</label>\n      <input type=\"number\" id=\"cpBudget\" min=\"0\" step=\"100000\" placeholder=\"e.g. 4000000\">\n      <p class=\"hint\" id=\"cpBudgetEcho\">Tuition fees only. Type the full amount, for example 4000000 for \u20b940 lakh. Living costs, visa fees and flights are not included.</p>\n    </div>\n  </div>\n  <div class=\"cp-grid\">\n    <div class=\"field\">\n      <label for=\"cpStay\">How much does staying on to work after the course matter?</label>\n      <select id=\"cpStay\">\n        <option value=\"2\">A lot \u2014 it is most of why I am going</option>\n        <option value=\"1\" selected>Somewhat \u2014 I would like the option</option>\n        <option value=\"0\">Not at all \u2014 I am coming straight home</option>\n      </select>\n    </div>\n    <div class=\"field\">\n      <label for=\"cpTest\">Do you want to avoid taking a GMAT or GRE?</label>\n      <select id=\"cpTest\">\n        <option value=\"1\" selected>Yes \u2014 weight countries with more no-test programmes</option>\n        <option value=\"0\">No \u2014 I will sit a test</option>\n      </select>\n    </div>\n  </div>\n  <div class=\"field\">\n    <label for=\"cpEng\">Do you need the course taught in English?</label>\n    <select id=\"cpEng\">\n      <option value=\"1\" selected>Yes</option>\n      <option value=\"0\">It does not matter</option>\n    </select>\n    <p class=\"hint\">We count a programme as taught in English if it asks for an IELTS or TOEFL score. If it\n    asks for neither, we do not count it either way.</p>\n  </div>\n  <div style=\"margin-top:6px\"><button class=\"btn\" type=\"button\" id=\"cpGo\">Rank the 16 countries</button></div>\n  <div id=\"cpErr\" role=\"alert\" aria-live=\"polite\" style=\"margin-top:12px\"></div>\n</div>\n\n<div id=\"cpOut\"></div>\n\n<div class=\"panel\" id=\"cpGateWrap\" hidden>\n  <h2>Get this by email</h2>\n  <p>We will email you your top 5 countries, with a link back to this page. Everything above stays free.</p>\n  <div id=\"cpGate\"></div>\n</div>\n</main></div>", "js": "\n(function(){\n'use strict';\nvar SCHOOLS = window.INVOLVE_SCHOOLS || [];\nvar COUNTRIES = window.INVOLVE_COUNTRIES || [];\n\nfunction esc(s){ return String(s==null?'':s)\n  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }\nvar NP = '<span class=\"cp-np\">not published</span>';\n\n/* ---------------------------------------------------------------------------\n   The one thing on this page that is not read out of a source: the exchange\n   rates. There is no rate feed here, because there are no external requests on\n   this site at all. These are fixed by hand, they carry the date they were set,\n   and they are printed on screen so a number you disagree with is a number you\n   can see. Everything else \u2014 tuition, test policy, visa length \u2014 comes out of\n   the data files.\n   ------------------------------------------------------------------------ */\nvar FX_SET_ON = '2026-09-06';\nvar FX = { INR:1, USD:88, EUR:96, GBP:113, CAD:63, AUD:57, NZD:51, CHF:103, SGD:66,\n           AED:24, HKD:11.3, SEK:8.8, NOK:8.4, DKK:12.9, JPY:0.57, CNY:12.3, RMB:12.3,\n           MYR:20, KRW:0.062, PLN:22.6, ZAR:4.9, QAR:24, SAR:23.5, TRY:2.2,\n           COP:0.022, KES:0.68 };\n\n/* countries.js is keyed by code; schools.js stores the country as a display\n   string. One map, declared once, rather than a fuzzy match. */\nvar CODE_TO_SCHOOL_COUNTRY = {\n  UK:'UK', DE:'Germany', US:'US', CA:'Canada', FR:'France', NL:'Netherlands',\n  IE:'Ireland', SG:'Singapore', AU:'Australia', ES:'Spain', IT:'Italy',\n  CH:'Switzerland', AE:'UAE', HK:'Hong Kong', SE:'Sweden', NZ:'New Zealand'\n};\n\nfunction inr(v, cur){\n  if(v==null||isNaN(v)) return null;\n  var r = FX[cur];\n  if(r==null) return null;\n  return v*r;\n}\nfunction rupees(n){\n  if(n==null||isNaN(n)) return null;\n  n=Math.round(n);\n  if(n>=10000000) return '\u20b9'+(n/10000000).toFixed(2).replace(/\\.00$/,'')+' Cr';\n  if(n>=100000)   return '\u20b9'+(n/100000).toFixed(1).replace(/\\.0$/,'')+' L';\n  return '\u20b9'+n.toLocaleString('en-IN');\n}\nfunction median(arr){\n  if(!arr.length) return null;\n  var a=arr.slice().sort(function(x,y){return x-y;});\n  var m=Math.floor(a.length/2);\n  return a.length%2 ? a[m] : (a[m-1]+a[m])/2;\n}\n\n/* the degree menu, built from the data rather than typed out */\n(function(){\n  var counts={};\n  SCHOOLS.forEach(function(s){ if(s.degree_type) counts[s.degree_type]=(counts[s.degree_type]||0)+1; });\n  var names=Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; });\n  document.getElementById('cpDeg').innerHTML =\n    '<option value=\"\">Any of them</option>' +\n    names.map(function(n){ return '<option value=\"'+esc(n)+'\">'+esc(n)+' ('+counts[n]+' programmes)</option>'; }).join('');\n})();\n\ndocument.getElementById('cpBudget').addEventListener('input', function(){\n  var v=parseFloat(this.value);\n  document.getElementById('cpBudgetEcho').textContent = (isNaN(v)||v<=0)\n    ? 'Tuition fees only. Type the full amount, for example 4000000 for \u20b940 lakh. Living costs, visa fees and flights are not included.'\n    : 'That is ' + rupees(v) + '. Tuition fees only. Living costs, visa fees and flights are not included.';\n});\n\n/* ---------------------------------------------------------------------------\n   The five components. Each one is a number between 0 and 1, each one is shown\n   on the row with the raw figure behind it, and each one carries a weight that\n   comes from the user's own answers. A component with no data is not scored as\n   zero: it is dropped, its weight is dropped with it, and the row says so.\n   ------------------------------------------------------------------------ */\nfunction profileWeights(p){\n  return {\n    choice:  1,\n    money:   p.budget>0 ? 2 : 0,\n    notest:  p.avoidTest ? 2 : 0,\n    psw:     p.stay===2 ? 2.5 : p.stay===1 ? 1 : 0,\n    pr:      p.stay===2 ? 1.5 : p.stay===1 ? 0.5 : 0,\n    english: p.needEnglish ? 1 : 0\n  };\n}\n\nfunction analyse(c, p){\n  var label = CODE_TO_SCHOOL_COUNTRY[c.code];\n  var matched = SCHOOLS.filter(function(s){\n    if((s.countries||[]).indexOf(label)<0) return false;\n    if(p.degree && s.degree_type!==p.degree) return false;\n    return true;\n  });\n  var priced = matched.filter(function(s){ return s.tuition!=null && inr(s.tuition, s.tuition_currency)!=null; });\n  var pricedInr = priced.map(function(s){ return inr(s.tuition, s.tuition_currency); });\n  var med = median(pricedInr);\n  var affordable = p.budget>0 ? pricedInr.filter(function(v){ return v<=p.budget; }).length : 0;\n  var noTest = matched.filter(function(s){ return s.test_policy==='not_required'; }).length;\n  var waivable = matched.filter(function(s){ return s.test_policy==='waiver'||s.test_policy==='optional'||s.test_policy==='alternative'; }).length;\n  var english = matched.filter(function(s){ return !!s.english_requirements; }).length;\n\n  var lvl = (c.duration_by_level&&c.duration_by_level.masters!=null) ? c.duration_by_level.masters : c.duration_months;\n\n  var comp = {};\n  comp.choice = matched.length ? Math.min(matched.length/30, 1) : 0;\n  comp.money  = (p.budget>0 && priced.length) ? affordable/priced.length : null;\n  comp.notest = matched.length ? noTest/matched.length : null;\n  comp.psw    = (lvl==null) ? null : Math.min(lvl/36, 1) * (c.job_offer_required ? 0.5 : 1);\n  comp.pr     = (c.leads_to_pr===null||c.leads_to_pr===undefined) ? null : (c.leads_to_pr ? 1 : 0);\n  comp.english= matched.length ? english/matched.length : null;\n\n  var w = profileWeights(p), num=0, den=0, dropped=[];\n  Object.keys(w).forEach(function(k){\n    if(!w[k]) return;\n    if(comp[k]==null){ dropped.push(k); return; }\n    num += comp[k]*w[k]; den += w[k];\n  });\n\n  return {\n    c:c, label:label, matched:matched.length, priced:priced.length, medianInr:med,\n    affordable:affordable, noTest:noTest, waivable:waivable, english:english,\n    pswMonths:lvl, comp:comp, weights:w, dropped:dropped,\n    score: den ? Math.round(num/den*100) : 0, den:den\n  };\n}\n\nfunction rankAll(p){\n  return COUNTRIES.map(function(c){ return analyse(c,p); })\n                  .sort(function(a,b){ return b.score-a.score || b.matched-a.matched; });\n}\n\n/* ---------------------------------------------------------------------------\n   What would change the answer. The ranking is recomputed at a series of larger\n   budgets and the first place where two countries actually swap is reported,\n   with the budget that does it. If nothing swaps at three times the budget, it\n   says that instead of inventing a threshold.\n   ------------------------------------------------------------------------ */\nfunction whatWouldChange(p, ranked){\n  if(!(p.budget>0)) return 'Tell us a budget and this line will tell you what a bigger one would buy you.';\n  var basePos={};\n  ranked.forEach(function(r,i){ basePos[r.c.code]=i; });\n  var steps=[1.1,1.25,1.5,1.75,2,2.5,3], best=null;\n  for(var i=0;i<steps.length;i++){\n    var p2={}; Object.keys(p).forEach(function(k){p2[k]=p[k];});\n    p2.budget = p.budget*steps[i];\n    var r2 = rankAll(p2);\n    for(var j=0;j<r2.length;j++){\n      var was = basePos[r2[j].c.code];\n      if(was==null || was<=j) continue;\n      var passed = ranked[j];\n      if(!passed || passed.c.code===r2[j].c.code) continue;\n      /* Prefer the swap nearest the top of the list: a country moving from 14th\n         to 13th is true but useless, and the smallest budget step is not\n         automatically the most informative one. */\n      if(!best || j<best.j) best={j:j, was:was, budget:p2.budget, moved:r2[j].c.name, passed:passed.c.name};\n      break;\n    }\n    if(best && best.j<3) break;\n  }\n  if(best){\n    return 'If your budget were ' + rupees(best.budget - p.budget) + ' higher \u2014 ' + rupees(best.budget) +\n           ' in total \u2014 ' + best.moved + ' would move up from ' + (best.was+1) + ' to ' + (best.j+1) +\n           ', passing ' + best.passed + '. The extra money only means more of that ' +\n           'country\u2019s programmes fit your budget. Nothing else in the ranking changes.';\n  }\n  return 'Tripling your budget does not change the order at all. On the figures we hold, money is not what is ' +\n         'separating these countries for you \u2014 the post-study work rules and how many programmes exist are.';\n}\n\nvar COMP_LABEL = {\n  choice:  'Programmes for your degree',\n  money:   'Fees within your budget',\n  notest:  'Need no GMAT or GRE',\n  psw:     'Time you can stay and work after study',\n  pr:      'Can lead to permanent residence',\n  english: 'Ask for IELTS or TOEFL (taught in English)'\n};\n\nfunction bar(k, r){\n  var v=r.comp[k], w=r.weights[k];\n  if(!w) return '';\n  var raw;\n  if(k==='choice')  raw = r.matched + ' programme' + (r.matched===1?'':'s');\n  else if(k==='money')  raw = (r.priced ? r.affordable+' of '+r.priced+' with a published fee \u00b7 typical fee '+(r.medianInr==null?'not published':rupees(r.medianInr)) : 'no published fees');\n  else if(k==='notest') raw = r.noTest+' of '+r.matched+' \u00b7 '+r.waivable+' more where it is optional or can be waived';\n  else if(k==='psw')    raw = (r.pswMonths==null ? 'not published' : r.pswMonths+' months' + (r.c.job_offer_required?' \u00b7 job offer needed':''));\n  else if(k==='pr')     raw = (r.c.leads_to_pr===null||r.c.leads_to_pr===undefined) ? 'not published'\n                            : (r.c.leads_to_pr ? ('yes'+(r.c.pr_after_years?', after '+r.c.pr_after_years+' year'+(r.c.pr_after_years===1?'':'s'):'')) : 'no');\n  else raw = r.english+' of '+r.matched;\n\n  var val = (v==null)\n    ? '<span class=\"cp-bv np\">not scored \u2014 ' + esc(raw) + '</span>'\n    : '<span class=\"cp-bv\">' + Math.round(v*100) + ' / 100 &times; weight ' + w + '</span>';\n  var track = (v==null) ? '' : '<div class=\"cp-track\"><div class=\"cp-fill\" style=\"width:'+Math.round(v*100)+'%\"></div></div>';\n  return '<div class=\"cp-bar\"><span class=\"cp-bk\">'+esc(COMP_LABEL[k])+' \u2014 '+esc(raw)+'</span>'+val+track+'</div>';\n}\n\nfunction rowHtml(r, i){\n  var c=r.c;\n  var h='<div class=\"cp-rank'+(i===0?' top':'')+'\">';\n  h+='<div class=\"cp-top\"><span class=\"cp-pos\">'+(i+1)+'</span><span class=\"cp-name\">'+esc(c.name)+'</span>'+\n     '<span class=\"cp-score\">'+r.score+' / 100</span></div>';\n  h+='<div class=\"cp-bars\">'+['choice','money','notest','psw','pr','english'].map(function(k){return bar(k,r);}).join('')+'</div>';\n  if(r.dropped.length){\n    h+='<p class=\"cp-psw\"><strong>Not scored for '+esc(c.name)+':</strong> '+\n       esc(r.dropped.map(function(k){return COMP_LABEL[k].toLowerCase();}).join('; '))+\n       '. We have no figure for this, so we left it out and scored the other parts. We did not count it as zero, because that would be unfair to this country.</p>';\n  }\n  h+='<p class=\"cp-psw\"><strong>'+esc(c.route)+'.</strong> '+esc(c.duration_note||'')+'</p>';\n  h+='<details class=\"cp-src\"><summary>The rest of the rule, and where we read it</summary><div class=\"cp-quote\">'+\n     '<p><strong>What you may do on it.</strong> '+esc(c.work_restrictions||'Not published.')+'</p>'+\n     '<p><strong>What you switch onto.</strong> '+esc(c.switch_route||'Not published.')+\n     (c.switch_salary_threshold ? ' Salary floor: '+esc(c.switch_salary_threshold.currency+' '+c.switch_salary_threshold.amount+' a '+c.switch_salary_threshold.period+' ('+c.switch_salary_threshold.year+')')+'. '+esc(c.switch_salary_threshold.note||'') : '')+'</p>'+\n     '<p><strong>Permanent residence.</strong> '+esc(c.pr_note||'Not published.')+'</p>'+\n     '<p><strong>When you must apply.</strong> '+esc(c.apply_deadline||'Not published.')+'</p>'+\n     '<p><strong>Known costs.</strong> '+esc(c.known_costs||'Not published.')+'</p>'+\n     (c.india_watch_out?'<p><strong>Read this if you are applying from India.</strong> '+esc(c.india_watch_out)+'</p>':'')+\n     '<p>'+esc(c.source||'')+'. Checked '+esc(c.checked_on||'not dated')+'. '+\n     (c.source_url?'<a href=\"'+esc(c.source_url)+'\" rel=\"noopener\" target=\"_blank\">'+esc(c.source_url)+'</a>':'')+'</p>'+\n     (c.needs_official_confirmation?'<p><strong>This record is flagged as needing official confirmation.</strong> Treat its figures as provisional and check the source before you rely on them.</p>':'')+\n     '</div></details>';\n  h+='</div>';\n  return h;\n}\n\nvar LAST=null;\n\nfunction waLink(number, p, ranked){\n  var top=ranked.slice(0,3).map(function(r,i){ return (i+1)+') '+r.c.name+' ('+r.score+'/100, '+r.matched+' programmes'+\n    (r.pswMonths==null?', post-study work not published':', '+r.pswMonths+' months post-study work')+')'; }).join('; ');\n  var txt='Hello Involve. I used the country picker on your tools site. I am looking at '+\n    (p.degree||'any business master\u2019s')+', with a tuition budget of '+(p.budget>0?rupees(p.budget):'no budget entered')+'. '+\n    'Staying on to work matters '+(p.stay===2?'a lot':p.stay===1?'somewhat':'not at all')+', I '+\n    (p.avoidTest?'would rather avoid a GMAT or GRE':'am willing to sit a GMAT or GRE')+', and I '+\n    (p.needEnglish?'need the course taught in English':'do not mind the language of instruction')+'. '+\n    'It ranked: '+top+'. I would like help deciding.';\n  return 'https://wa.me/'+number+'?text='+encodeURIComponent(txt);\n}\n\nfunction render(){\n  var deg=document.getElementById('cpDeg').value;\n  var bv=document.getElementById('cpBudget').value.trim();\n  var p={\n    degree: deg,\n    budget: bv===''?0:parseFloat(bv),\n    stay: parseInt(document.getElementById('cpStay').value,10),\n    avoidTest: document.getElementById('cpTest').value==='1',\n    needEnglish: document.getElementById('cpEng').value==='1'\n  };\n  if(isNaN(p.budget)) p.budget=0;\n\n  var err=document.getElementById('cpErr');\n  if(bv!=='' && (p.budget<0 || (p.budget>0 && p.budget<100000) || p.budget>100000000)){\n    err.innerHTML='<div class=\"flag\"><p>'+(p.budget<0 ? 'The budget cannot be below zero.'\n      : p.budget<100000 ? 'That budget looks too small. Type the full amount in rupees. For \u20b940 lakh, type 4000000.'\n      : 'That budget looks too big. Type the full amount in rupees. For \u20b940 lakh, type 4000000.')+'</p></div>';\n    document.getElementById('cpOut').innerHTML='';\n    document.getElementById('cpGateWrap').hidden=true;\n    return;\n  }\n  var w=profileWeights(p), total=0;\n  Object.keys(w).forEach(function(k){ total+=w[k]; });\n  if(total<=1 && !p.budget){\n    err.innerHTML='<div class=\"flag\"><p>With no budget, no interest in staying on, no wish to avoid a test and no '+\n      'language requirement, the only thing left to rank on is how many programmes exist. Answer at least one of the '+\n      'other questions and this becomes a ranking rather than a head count.</p></div>';\n  } else { err.innerHTML=''; }\n\n  var ranked=rankAll(p);\n  LAST={p:p, ranked:ranked};\n\n  var scored=ranked.filter(function(r){return r.matched>0;});\n  var empty=ranked.filter(function(r){return r.matched===0;});\n\n  var h='';\n  h+='<div class=\"panel\"><h2>What you asked for, and what we had</h2>'+\n     '<div class=\"metric-row\"><span class=\"k\">Degree</span><span class=\"v\">'+esc(p.degree||'Any')+'</span></div>'+\n     '<div class=\"metric-row\"><span class=\"k\">Tuition budget</span><span class=\"v\">'+(p.budget>0?esc(rupees(p.budget)):'<span class=\"cp-np\">not given</span>')+'</span></div>'+\n     '<div class=\"metric-row\"><span class=\"k\">Countries ranked</span><span class=\"v\">'+ranked.length+'</span></div>'+\n     '<div class=\"metric-row\"><span class=\"k\">Countries with at least one matching programme</span><span class=\"v\">'+scored.length+'</span></div>'+\n     '</div>';\n\n  h+='<div class=\"panel\"><h2>What would change the answer</h2><p style=\"margin:0\">'+esc(whatWouldChange(p, ranked))+'</p></div>';\n\n  h+='<div class=\"panel\"><h2>The ranking</h2>'+\n     '<p class=\"cp-legend\">Each country gets a score out of 100. Each row shows what went into it, and how much '+\n     'your answers made each part count. A part with no data is left out, not scored as zero.</p>'+\n     scored.map(rowHtml).join('') +\n     (empty.length ? '<div class=\"empty\"><p><strong>No matching programmes at all in '+\n        esc(empty.map(function(r){return r.c.name;}).join(', '))+'.</strong> This is a gap in our data for this degree, not a verdict on those countries. Their work rules '+\n        'after study are in the visa tool.</p></div>' : '') +\n     '</div>';\n\n  h+='<div class=\"panel\"><h2>How we worked this out</h2>'+\n     '<p>Programme numbers, fees and test rules come from our programme list. Work rights after study come from '+\n     '<strong>'+COUNTRIES.length+' government websites, each with the date we read it</strong>. If a number is not '+\n     'published, we leave that part out of the score instead of counting it as zero.</p>'+\n     '<p>Fees are changed into rupees at fixed rates we set on '+esc(FX_SET_ON)+': 1 US dollar = \u20b9'+FX.USD+\n     ', 1 euro = \u20b9'+FX.EUR+', 1 pound = \u20b9'+FX.GBP+', 1 Canadian dollar = \u20b9'+FX.CAD+', 1 Australian dollar = \u20b9'+FX.AUD+\n     ', 1 Swiss franc = \u20b9'+FX.CHF+', 1 Singapore dollar = \u20b9'+FX.SGD+'. We do not fetch live rates, so check '+\n     'today\u2019s rate before you decide.</p>'+\n     '<p>The typical fee is the middle fee of the programmes that publish one. Each row shows how many that is. '+\n     '\u201cNo test at all\u201d means the school asks for no test. Programmes where the test is optional or can be waived '+\n     'are counted separately.</p>'+\n     '<p>Visa rules change often. Each country shows the date we read its rules and a link to the page. Open '+\n     'the link before you choose a country.</p>'+\n     '</div>';\n\n  h+='<div class=\"panel\"><h2>Take this to a person</h2>'+\n     '<p>A ranking narrows your choice. It does not tell you if your profile is strong enough for the top '+\n     'country, or which country is best for the job you want. We can talk that through with you.</p>'+\n     '<div class=\"cp-wa\">'+\n     '<a class=\"btn\" href=\"'+esc(waLink('33749227373', p, ranked))+'\" rel=\"noopener\" target=\"_blank\">WhatsApp +33 7 49 22 73 73</a>'+\n     '<a class=\"btn\" href=\"'+esc(waLink('919769779615', p, ranked))+'\" rel=\"noopener\" target=\"_blank\">WhatsApp +91 97 69 77 96 15</a>'+\n     '<a class=\"btn ghost\" href=\"https://involve-consulting.com/contact-us/?utm_source=tools&amp;utm_medium=country-picker&amp;utm_campaign=result\" rel=\"noopener\" target=\"_blank\">Send it by form instead</a>'+\n     '</div>'+\n     '<p class=\"cp-note\">The WhatsApp buttons open your own WhatsApp with a message ready: what you asked '+\n     'for and your top three. Nothing is sent until you press send, and you can change the message first.</p></div>';\n\n  document.getElementById('cpOut').innerHTML=h;\n  document.getElementById('cpGateWrap').hidden=false;\n  if(window.involveTrack) window.involveTrack('tool_complete', {tool:'country-picker', matched:scored.length});\n}\n\ndocument.getElementById('cpGo').addEventListener('click', render);\n\nwindow.INVOLVE_PAYLOAD_LABELS_BY_TOOL = window.INVOLVE_PAYLOAD_LABELS_BY_TOOL || {};\nwindow.INVOLVE_PAYLOAD_LABELS_BY_TOOL['country-picker'] = {\n  degree:    'the degree you chose',\n  budget:    'the rupee tuition budget you entered',\n  stay:      'how much you said staying on to work matters',\n  avoidTest: 'whether you said you want to avoid a GMAT or GRE',\n  needEnglish:'whether you said you need the course taught in English',\n  countries: 'the country codes of your top five, in order',\n  matched:   'how many of the sixteen countries had a matching programme'\n};\n\n(function(){\n  var w=document.getElementById('cpGateWrap');\n  if(window.involveGate && !w.dataset.wired){\n    w.dataset.wired='1';\n    window.involveGate(document.getElementById('cpGate'), {\n      tool:'country-picker', cta:'Email me this result',\n      summary:function(){\n        var r=(LAST&&LAST.ranked)||[];\n        if(!r.length) return {};\n        return {result:'Your best match: '+r[0].c.name,\n                top:r.slice(0,5).map(function(x,i){return (i+1)+'. '+x.c.name+' \u2014 '+x.score+'/100, '+x.matched+' programmes';})};\n      },\n      payload:function(){\n        var p=(LAST&&LAST.p)||{degree:'',budget:0,stay:1,avoidTest:true,needEnglish:true};\n        var r=(LAST&&LAST.ranked)||[];\n        return {degree:p.degree, budget:p.budget, stay:p.stay, avoidTest:p.avoidTest,\n                needEnglish:p.needEnglish,\n                countries:r.slice(0,5).map(function(x){return x.c.code;}),\n                matched:r.filter(function(x){return x.matched>0;}).length};\n      }\n    });\n  }\n})();\n})();\n"}};
 /* Which view a bare URL, an unknown route or a stray in-page anchor lands on.
    'home' in the combined bundle. In a single-tool page there IS no home view,
    so the fallback is that tool: the page must never route to a view it does

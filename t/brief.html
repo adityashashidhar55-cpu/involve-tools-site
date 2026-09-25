@@ -290,6 +290,26 @@ input[type=number] { font-family: var(--mono); }
   align-items: flex-start; max-width: 60ch; margin-bottom: 10px;
 }
 .gate-check input[type=checkbox] { width: auto; margin-top: 4px; flex: 0 0 auto; }
+/* "Get this by email" form (email-dev, 2026-09-25) */
+.igate { max-width: 660px; }
+.igate-h { margin: 0 0 6px; }
+.igate-intro { margin: 0 0 14px; max-width: 62ch; }
+.igate-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0 16px; }
+.igate-fields .field { margin-bottom: 12px; min-width: 0; }
+.igate-fields input { width: 100%; box-sizing: border-box; }
+.igate .gate-check span { overflow-wrap: anywhere; }
+.igate-privacy { max-width: 62ch; font-size: .8rem; margin: 6px 0 0; }
+.igate-actions { margin-top: 14px; }
+.igate-msg { margin-top: 12px; }
+.igate-msg .flag { max-width: 62ch; }
+.igate-again { margin-top: 12px; font-size: .85rem; padding: 7px 14px; }
+.igate [aria-invalid="true"] { border-color: #C0392B; box-shadow: 0 0 0 1px #C0392B; }
+.igate .gate-check input[aria-invalid="true"] { outline: 2px solid #C0392B; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .igate-fields { grid-template-columns: 1fr; }
+  .igate-actions .btn { width: 100%; }
+}
+@media print { .igate { display: none; } }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 .metric-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
@@ -897,158 +917,253 @@ window.INVOLVE_PAYLOAD_LABELS_BY_TOOL = {
    The two are stored SEPARATELY and mean different things. The first is the
    report the person asked for. The second is marketing, is optional, and
    leaving it unticked changes nothing about the first. */
+/* ---------------------------------------------------------------------------
+   THE EMAIL FORM ("Get this by email"). One component, used by every tool.
+
+   - It is shown AFTER the result. The tools stay free and work without it.
+   - Two tick boxes, stored separately:
+       1. "Email me this result."  Required, because it is what the form does.
+       2. Tips on deadlines and funding.  Optional, never ticked for you
+          (GDPR: marketing consent must be separate and unticked).
+   - The privacy line lists every field the form sends, built from the same
+     keys the tool puts in its payload, and that exact sentence is stored with
+     the consent record. Bump `version` whenever a sentence below changes.
+   - A tool may pass `summary()` returning { result: 'one line', top: [...] }.
+     This is a short summary of the result (numbers, school or country names),
+     never free text the person typed.
+   --------------------------------------------------------------------------- */
 window.INVOLVE_GATE_CONSENT = {
-  version: 'gate-2026-09-06.1',
-  report: 'Email me this report. One email, because I asked for it.',
-  marketing: 'Optional, and a separate decision: also send occasional notes about deadlines and ' +
-             'funding. Leave this unticked and you still get the report. One click unsubscribes, ' +
-             'and we do not pass your address to anyone.'
+  version: 'gate-2026-09-25.1',
+  report: 'Email me this result.',
+  marketing: 'Also send me occasional tips on deadlines and funding. (Optional. You can stop them at any time.)'
 };
 
+/* Labels for the keys added in this version. The old labels stay as they were. */
+(function () {
+  var L = window.INVOLVE_PAYLOAD_LABELS = window.INVOLVE_PAYLOAD_LABELS || {};
+  var add = {
+    result:     'a one-line summary of your result',
+    top:        'the main items in your result (for example school or country names)',
+    residence:  'the country you live in now',
+    noTestOnly: 'whether you ticked “no GMAT or GRE”',
+    tool_page:  'which page you used'
+  };
+  for (var k in add) { if (!L[k]) L[k] = add[k]; }
+})();
+
+window.__involveGateN = window.__involveGateN || 0;
+
 window.involveGate = function (mount, opts) {
+  if (!mount) return;
+  opts = opts || {};
   var CONSENT = window.INVOLVE_GATE_CONSENT;
   var byTool = (window.INVOLVE_PAYLOAD_LABELS_BY_TOOL || {})[opts.tool] || {};
-  var labels = window.INVOLVE_PAYLOAD_LABELS, listed = [];
-  try {
-    var p = opts.payload() || {};
-    for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) {
-      listed.push(byTool[k] || labels[k] || ('the value of “' + k + '”'));
-    } }
-  } catch (e) { listed = []; }
-  var sends = listed.length === 0 ? 'nothing else'
-            : listed.length === 1 ? listed[0]
-            : listed.slice(0, -1).join(', ') + ' and ' + listed[listed.length - 1];
+  var labels = window.INVOLVE_PAYLOAD_LABELS || {};
+  var uid = 'ig' + (++window.__involveGateN);
 
-  /* The disclosure sentence is built once, printed on screen, and stored with
-     the consent record, so what was promised and what is held are the same
-     string. It names every key this particular tool's payload contains. */
-  var disclosure = 'Tick the first box and this is the whole of what leaves your browser: your ' +
-                   'name, your email address, and ' + sends + '. Nothing else on this page is sent.';
+  /* Shorten to n characters without cutting a word in half (supervisor-email). */
+  function clip(v, n) {
+    v = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    if (v.length <= n) return v;
+    var cut = v.slice(0, n - 1), sp = cut.lastIndexOf(' ');
+    if (sp > n * 0.6) cut = cut.slice(0, sp);
+    return cut.replace(/[\s,;:.\u2014-]+$/, '') + '…';
+  }
 
-  /* A <form>, so Enter in the email field submits. Without it the single most
-     common form habit there is did nothing at all - no message, no feedback. */
+  /* What this form sends, in words. */
+  function keysNow() {
+    var keys = [];
+    try { var p = opts.payload ? (opts.payload() || {}) : {};
+          for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) keys.push(k); } catch (e) {}
+    if (opts.summary) {
+      /* Name only what the summary really holds. If it is not ready yet, name both (never too little). */
+      var sm = {}; try { sm = opts.summary() || {}; } catch (e) {}
+      var hasR = !!sm.result, hasT = !!(sm.top && sm.top.filter(Boolean).length);
+      if ((hasR || !hasT) && keys.indexOf('result') < 0) keys.push('result');
+      if ((hasT || !hasR) && keys.indexOf('top') < 0) keys.push('top');
+    }
+    return keys;
+  }
+  function disclosureFor(keys) {
+    var listed = keys.map(function (k) { return byTool[k] || labels[k] || ('the value of “' + k + '”'); });
+    var sends = listed.length === 0 ? '' : listed.length === 1 ? ', and ' + listed[0]
+              : ', ' + listed.slice(0, -1).join(', ') + ' and ' + listed[listed.length - 1];
+    return 'What we send: your name, your email' + sends + '. Nothing else from this page. ' +
+           'We use it to send this email. We only send other emails if you tick the second box. ' +
+           'We never sell or share your email. To delete your details, write to contact@involve-consulting.com.';
+  }
+  var disclosure = disclosureFor(keysNow());
+
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
   mount.innerHTML =
-    '<form novalidate id="gForm">' +
-    '<div class="field" style="max-width:400px"><label for="gName">Your name</label>' +
-    '<input type="text" id="gName" autocomplete="name"></div>' +
-    '<div class="field" style="max-width:400px"><label for="gEmail">Email address</label>' +
-    '<input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com"></div>' +
-    '<label class="gate-check"><input type="checkbox" id="gConsent">' +
-    '<span>' + CONSENT.report + '</span></label>' +
-    '<label class="gate-check"><input type="checkbox" id="gMarketing">' +
-    '<span>' + CONSENT.marketing + '</span></label>' +
-    '<p class="hint" style="max-width:60ch">' + disclosure + '</p>' +
-    '<div style="margin-top:14px"><button class="btn" type="submit" id="gSend">' +
-      (opts.cta || 'Email me the report') + '</button></div>' +
-    /* role=alert + aria-live, because every validation error and the whole
-       "not connected yet" message used to be injected in silence. */
-    '<div id="gMsg" role="alert" aria-live="assertive" aria-atomic="true" style="margin-top:12px"></div>' +
+    '<form class="igate" novalidate>' +
+    (opts.heading ? '<h3 class="igate-h">' + esc(opts.heading) + '</h3>' : '') +
+    (opts.intro ? '<p class="igate-intro">' + esc(opts.intro) + '</p>' : '') +
+    '<div class="igate-body">' +
+      '<div class="igate-fields">' +
+        '<div class="field"><label for="' + uid + 'n">Your name</label>' +
+        '<input type="text" id="' + uid + 'n" data-g="name" autocomplete="name" maxlength="200"></div>' +
+        '<div class="field"><label for="' + uid + 'e">Your email</label>' +
+        '<input type="email" id="' + uid + 'e" data-g="email" autocomplete="email" inputmode="email" ' +
+        'maxlength="200" placeholder="name@example.com"></div>' +
+      '</div>' +
+      '<label class="gate-check"><input type="checkbox" data-g="consent"><span>' + esc(CONSENT.report) + '</span></label>' +
+      '<label class="gate-check"><input type="checkbox" data-g="marketing"><span>' + esc(CONSENT.marketing) + '</span></label>' +
+      '<p class="hint igate-privacy" data-g="privacy">' + esc(disclosure) + '</p>' +
+      '<div class="igate-actions"><button class="btn" type="submit" data-g="send">' +
+        esc(opts.cta || 'Email me this result') + '</button></div>' +
+    '</div>' +
+    '<div class="igate-msg" data-g="msg" aria-live="polite"></div>' +
     '</form>';
 
-  var form = mount.querySelector('#gForm');
-  var btn = mount.querySelector('#gSend');
+  var form = mount.querySelector('form');
+  function q(n) { return mount.querySelector('[data-g="' + n + '"]'); }
+  var btn = q('send'), body = mount.querySelector('.igate-body');
   var sending = false;
+  /* The result can change after the form is drawn: keep the privacy line true. */
+  form.addEventListener('focusin', function () {
+    disclosure = disclosureFor(keysNow()); q('privacy').textContent = disclosure;
+  });
 
-  /* Never build a message by concatenating an address into innerHTML. The
-     validating regex excludes '@' and whitespace and nothing else, so '<', '>'
-     and '"' all pass it, and a real <svg> element built from user input was
-     reproducible on the two live-endpoint branches. */
-  function say(cls, nodes) {
-    var msg = mount.querySelector('#gMsg');
+  /* Messages are built with text nodes only, never by putting what someone
+     typed into innerHTML. */
+  function say(kind, parts, extraBtn) {
+    var msg = q('msg');
     msg.textContent = '';
     var box = document.createElement('div');
-    box.className = cls;
+    box.className = kind === 'good' ? 'flag good' : kind === 'wait' ? 'hint' : 'flag';
+    if (kind === 'bad') box.setAttribute('role', 'alert');
     var para = document.createElement('p');
-    nodes.forEach(function (n) { para.appendChild(typeof n === 'string' ? document.createTextNode(n) : n); });
+    para.style.margin = '0';
+    parts.forEach(function (n) {
+      if (typeof n === 'string') para.appendChild(document.createTextNode(n));
+      else { var b = document.createElement('strong'); b.textContent = n.b; para.appendChild(b); }
+    });
     box.appendChild(para);
+    if (extraBtn) {
+      var again = document.createElement('button');
+      again.type = 'button'; again.className = 'btn btn-quiet igate-again';
+      again.textContent = 'Send to a different email';
+      again.addEventListener('click', function () {
+        body.hidden = false; q('msg').textContent = ''; q('email').focus();
+      });
+      box.appendChild(again);
+    }
     msg.appendChild(box);
   }
-  function strong(t) { var e = document.createElement('strong'); e.textContent = t; return e; }
+  function bad(field, text) {
+    ['name', 'email', 'consent'].forEach(function (f) { q(f).removeAttribute('aria-invalid'); });
+    if (field) { q(field).setAttribute('aria-invalid', 'true'); q(field).focus(); }
+    say('bad', [text]);
+  }
 
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
-    if (sending) return;                       /* three rapid clicks used to fire three POSTs */
-    var name = mount.querySelector('#gName').value.trim();
-    var email = mount.querySelector('#gEmail').value.trim();
-    if (!name) { say('flag', ['Enter your name.']); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      say('flag', ['That does not look like an email address.']); return; }
-    if (!mount.querySelector('#gConsent').checked) {
-      say('flag', ['Tick the first box so we know we may email you the report. The second box is ' +
-                   'optional and you can leave it alone.']); return; }
+    if (sending) return;
+    var name = q('name').value.trim();
+    var email = q('email').value.trim();
+    if (!name) { bad('name', 'Please type your name.'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email) || email.length > 200) {
+      bad('email', 'Please check your email address. It should look like name@example.com.'); return; }
+    if (!q('consent').checked) {
+      bad('consent', 'Please tick “' + CONSENT.report + '” so we can send it. The second box is optional.'); return; }
+    ['name', 'email', 'consent'].forEach(function (f) { q(f).removeAttribute('aria-invalid'); });
 
+    /* The payload: the tool's facts plus its short result summary. */
+    var payload = {};
+    try { payload = opts.payload ? (opts.payload() || {}) : {}; } catch (e) { payload = {}; }
+    if (opts.summary) {
+      try {
+        var sm = opts.summary() || {};
+        if (sm.result) payload.result = clip(sm.result, 200);
+        if (sm.top && sm.top.length) payload.top = sm.top.filter(Boolean).slice(0, 10).map(function (x) { return clip(x, 160); });
+      } catch (e) {}
+    }
+    disclosure = disclosureFor(keysNow());
+    q('privacy').textContent = disclosure;
+
+    var marketing = q('marketing').checked;
     sending = true;
     btn.disabled = true;
     var wasLabel = btn.textContent;
     btn.textContent = 'Sending…';
-    mount.querySelector('#gMsg').textContent = '';
-    var hint = document.createElement('p');
-    hint.className = 'hint';
-    hint.textContent = 'Sending…';
-    mount.querySelector('#gMsg').appendChild(hint);
-    window.involveTrack('gate_submit', { tool: opts.tool, marketing: mount.querySelector('#gMarketing').checked });
+    say('wait', ['Sending…']);
+    if (window.involveTrack) window.involveTrack('gate_submit', { tool: opts.tool, marketing: marketing });
 
     function done() { sending = false; btn.disabled = false; btn.textContent = wasLabel; }
+    var onPage = opts.onPage ? String(opts.onPage) : '';
+    var what = opts.summary ? 'a summary' : 'a link back to this page';
 
-    window.involveCapture({ name: name, email: email, tool: opts.tool,
-                            marketing: mount.querySelector('#gMarketing').checked,
-                            /* The consent record travels with the submission:
-                               the version, the sentence beside the box that was
-                               ticked, and the list of fields this gate promised
-                               to send. The endpoint stores each separately. */
+    window.involveCapture({ name: name, email: email, tool: opts.tool, marketing: marketing,
                             consent: true,
                             consent_version: CONSENT.version,
                             consent_text: CONSENT.report + ' ' + disclosure,
                             marketing_text: CONSENT.marketing,
-                            source_url: String(location.href).split('?')[0],
-                            payload: opts.payload() })
+                            source_url: String(location.href).split('?')[0].split('#')[0] +
+                                        (location.hash && location.hash.indexOf('#/') === 0 ? location.hash.split('?')[0] : ''),
+                            payload: payload })
       .then(function (res) {
         done();
+        res = res || {};
         if (res.suppressed) {
-          /* On the do-not-contact list. Nothing was stored, and saying "on its
-             way" to somebody who has asked us to stop would be the worst
-             possible answer. */
-          say('flag', [String(res.message || 'That address is on our do-not-contact list, so ' +
-                              'nothing was stored and nothing will be sent.')]);
+          say('bad', ['This email address asked us not to contact it, so we saved nothing. ' +
+                      'If this is a mistake, write to contact@involve-consulting.com.']);
         } else if (res.duplicate) {
-          say('flag', ['This report has already been requested for ', email,
-                       '. Check that inbox, including spam. We send one per address per tool, so ' +
-                       'using another tool here still gets you its own email.']);
-        } else if (res.email_sent === false) {
-          /* Stored, consented, and NOT emailed - because a secret the owner has
-             to supply is missing. Print the endpoint's own sentence, which names
-             the secret. The alternative is "On its way" over an email that will
-             never arrive, which is the exact failure this build refuses to
-             repeat. */
-          say('flag', [strong('Saved, but not emailed yet.'), ' ',
-                       String(res.message || 'The report could not be emailed. We can see this ' +
-                              'and will send it by hand: contact@involve-consulting.com.')]);
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We already had your request, so we will not email you twice.']
+                             : [{ b: 'We already have this request.' }, ' We will not email ' + email +
+                                ' twice. Please check your inbox and spam folder.'], true);
+        } else if (res.email_sent === true) {
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We have also emailed ' + what + ' to ' + email + '.']
+                             : [{ b: 'Done.' }, ' We have emailed this to ' + email + '. If you can’t find it, check your spam folder.'], true);
+        } else if (res.stored) {
+          /* Saved, and queued: the email goes out as soon as sending is
+             switched on (the queue is retried every hour). */
+          body.hidden = true;
+          say('good', onPage ? [{ b: 'Done.' }, ' ' + onPage + ' We will also email ' + what + ' to ' + email + '.']
+                             : [{ b: 'Thanks, ' + name + '.' }, ' We have got your details. Your result will reach ' +
+                                email + ' soon. If you can’t find it, check your spam folder.'], true);
         } else {
-          say('flag good', ['On its way to ', email, '.']);
+          say('bad', [String(res.message || 'Sorry, that did not work. Please try again, or write to contact@involve-consulting.com.')]);
         }
         if (opts.onSent) opts.onSent(res);
       })
       .catch(function (e) {
         done();
         if (e && e.notWired) {
-          say('flag', [strong('Not connected yet.'),
-                       ' This form is not working yet. Nothing was sent or saved. ' +
-                       'Please email contact@involve-consulting.com instead.']);
+          say('bad', ['Email is not working on this page right now, so nothing was sent. ' +
+                      'Please write to contact@involve-consulting.com.']);
+        } else if (e && e.offline) {
+          say('bad', ['We could not connect, so nothing was sent. Check your internet and try again.']);
+        } else if (e && e.rate_limited) {
+          /* The server says which limit was hit (this connection, this address, or the whole day). */
+          say('bad', [String(e.message || 'Too many requests from this connection. Nothing was saved. Please try again in an hour.')]);
         } else if (e && e.message) {
-          /* The endpoint names what happened and whether anything was stored -
-             a bad address, the rate limit, a refusal. Pass it through: a
-             message somebody can act on beats "that did not send". */
-          say('flag', [String(e.message)]);
+          say('bad', [String(e.message)]);
         } else {
-          say('flag', ['That did not send. Please try again, or email us at ' +
-                       'contact@involve-consulting.com.']);
+          say('bad', ['Sorry, that did not work. Nothing was saved. Please try again, or write to ' +
+                      'contact@involve-consulting.com.']);
         }
+        if (opts.onFail) { try { opts.onFail(e || {}); } catch (x) {} }
       });
   });
 };
+
+/* Small helper for tools: the visible text of the first match, cut short. */
+window.involveText = function (sel, root, n) {
+  try {
+    var el = (root || document).querySelector(sel);
+    if (!el) return '';
+    var t = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+    n = n || 200;
+    return t.length > n ? t.slice(0, n - 1) + '…' : t;
+  } catch (e) { return ''; }
+};
 </script>
 <script>
-var VIEWS = {"brief": {"title": "Recommender brief builder", "html": "<div data-view=\"brief\"><div class=\"toolbar-strip\">\n  <div class=\"wrap\">\n    <span class=\"stamp is-ready\">Live</span>\n    <span id=\"saveClaim\">Runs on your device. Nothing you type is sent unless you use the email form at the bottom. Your answers are saved in this browser as you type.</span>\n  </div></div><main class=\"wrap\">\n\n  <div class=\"tool-head\">\n    <h1>Recommender brief builder</h1>\n    <p class=\"lede\">Your recommender is busy. Without facts from you, their letter will be vague.\n    This tool makes a short note with your key facts. Send it to them before they write.</p>\n  </div>\n\n  <div class=\"flag\" style=\"margin-bottom:22px\">\n    <p><strong>Do not write the letter yourself.</strong> Writing your own letter and asking someone\n    to sign it is cheating, and schools check. This note gives your recommender facts. They write the\n    letter in their own words.</p>\n  </div>\n\n  <div class=\"panel\">\n    <h2>Who is writing it</h2>\n    <div class=\"field-row\">\n      <div class=\"field\"><label for=\"rname\">Their name</label><input type=\"text\" id=\"rname\" placeholder=\"e.g. Priya Menon\"></div>\n      <div class=\"field\"><label for=\"rrole\">Their role, and how they know you</label><input type=\"text\" id=\"rrole\" placeholder=\"e.g. my reporting manager for the last three years\"></div>\n    </div>\n    <div class=\"field-row\">\n      <div class=\"field\"><label for=\"yname\">Your name</label><input type=\"text\" id=\"yname\"></div>\n      <div class=\"field\"><label for=\"school\">School and programme</label><input type=\"text\" id=\"school\" placeholder=\"e.g. INSEAD MBA, January intake\"></div>\n    </div>\n    <div class=\"field-row\">\n      <div class=\"field\"><label for=\"deadline\">Their deadline</label><input type=\"text\" id=\"deadline\" placeholder=\"e.g. 14 October\"></div>\n      <div class=\"field\"><label for=\"submit\">How they submit</label><input type=\"text\" id=\"submit\" placeholder=\"e.g. an emailed portal link from the school\"></div>\n    </div>\n  </div>\n\n  <div class=\"panel\">\n    <h2>What the school wants them to comment on</h2>\n    <p class=\"hint\" style=\"margin-top:-6px\">Look at the school's form for recommenders. Pick only the\n    qualities it names.</p>\n    <div class=\"chips\" id=\"traits\"></div>\n  </div>\n\n  <div class=\"panel\">\n    <h2>Examples of your work</h2>\n    <p class=\"hint\" style=\"margin-top:-6px\">Two or three things they saw you do, and what happened.\n    Be specific. \"Handled a difficult client\" is too vague. \"Kept the Reliance account after we missed\n    two deliveries, and it renewed at a higher value\" is useful.</p>\n    <div class=\"field\"><label for=\"s1\">First example</label><textarea id=\"s1\" rows=\"3\" placeholder=\"What happened, what you did, and the result.\"></textarea></div>\n    <div class=\"field\"><label for=\"s2\">Second example</label><textarea id=\"s2\" rows=\"3\"></textarea></div>\n    <div class=\"field\"><label for=\"s3\">Third example, if you have one</label><textarea id=\"s3\" rows=\"3\"></textarea></div>\n  </div>\n\n  <div class=\"panel\">\n    <h2>A few more questions</h2>\n    <div class=\"field\">\n      <label for=\"weak\">Most schools ask about something you need to improve. What would you like them to say?</label>\n      <textarea id=\"weak\" rows=\"2\" placeholder=\"Pick something real that you have worked on. A letter that says you have no weaknesses sounds like the writer does not know you well.\"></textarea>\n    </div>\n    <div class=\"field\">\n      <label for=\"why\">Why you want this degree, in one or two lines</label>\n      <textarea id=\"why\" rows=\"2\" placeholder=\"So their letter matches your essays.\"></textarea>\n    </div>\n    <div class=\"field\">\n      <label for=\"note\">Anything else they should know</label>\n      <textarea id=\"note\" rows=\"2\" placeholder=\"e.g. the school likes real stories more than praise words, or there is a gap in my CV to explain.\"></textarea>\n    </div>\n    <div class=\"btn-row\">\n      <button class=\"btn\" id=\"build\">Build the brief</button>\n      <button class=\"btn ghost\" id=\"reset\">Start again (clears your answers)</button>\n    </div>\n    <p class=\"hint\" id=\"saveHint\">Your answers are saved in this browser as you type, so you can leave\n    and come back. Saving sends nothing. \"Start again\" deletes them.</p>\n  </div>\n\n  <div id=\"out\" hidden>\n    <div class=\"panel\">\n      <h2>Your brief</h2>\n      <div id=\"thin\" hidden></div>\n      <p class=\"hint\" style=\"margin-top:-6px\">Read it once as if you were them. Then send it.</p>\n      <div class=\"readout\" id=\"brief\" style=\"background:var(--paper-sunk);padding:22px;border-radius:4px;border:1px solid var(--rule)\"></div>\n      <div class=\"btn-row\">\n        <button class=\"btn\" id=\"copy\">Copy to clipboard</button>\n        <button class=\"btn ghost\" id=\"dl\">Download as a text file</button>\n      </div>\n      <p class=\"hint\" id=\"copyMsg\" role=\"status\" aria-live=\"polite\" hidden></p>\n    </div>\n    <div class=\"panel\" id=\"briefGatePanel\">\n      <h2>Email this brief to yourself</h2>\n      <p>Keep it in your inbox for when you write to your recommender. Copy and download above are\n      always free.</p>\n      <div id=\"gateBrief\"></div>\n    </div>\n\n    <div class=\"panel\">\n      <h2>Before you send it</h2>\n      <p>Ask them in person or on a call first. Ask if they can write you a <em>strong</em> letter. If\n      they hesitate, take that as a sign. A detailed letter from your direct manager is better than a\n      lukewarm one from a senior boss.</p>\n      <a class=\"btn\" href=\"https://involve-consulting.com/contact-us/?utm_source=tools&amp;utm_medium=brief&amp;utm_campaign=choosing-recommenders\">Get help choosing recommenders</a>\n    </div>\n  </div>\n\n</main></div>", "js": "\nconst TRAITS = ['Leadership','Teamwork','Impact and results','Self-awareness','Handling feedback',\n  'Integrity','Communication','Analytical ability','Initiative','Working across cultures',\n  'Managing conflict','Growth over time'];\n\nconst picked = new Set();\nconst wrap = document.getElementById('traits');\nTRAITS.forEach(t => {\n  const b = document.createElement('button');\n  b.type = 'button'; b.className = 'chip'; b.textContent = t; b.setAttribute('aria-pressed', 'false');\n  b.addEventListener('click', () => {\n    const on = b.getAttribute('aria-pressed') === 'true';\n    b.setAttribute('aria-pressed', String(!on));\n    on ? picked.delete(t) : picked.add(t);\n    /* Selecting AND deselecting are both edits to the draft. Saving only on\n       `input` over the text fields lost every trait on a route change, and -\n       worse - a deselect after a text edit left the old selection in storage,\n       so traits the user had deliberately removed came back pressed and got\n       sent to the recommender. */\n    saveDraft();\n  });\n  wrap.appendChild(b);\n});\n\nconst v = id => document.getElementById(id).value.trim();\n\n/* ---- the draft, kept ------------------------------------------------------\n   This form is fifteen to thirty minutes of real work: three STAR examples, a\n   genuine weakness, a why-MBA. Every route change used to wipe it silently,\n   and the masthead sitting directly above the form has five links that do\n   exactly that. The draft now lives in localStorage, keyed per field, and is\n   restored on mount. It never leaves the browser - localStorage is per-origin\n   and is not readable by us or by anyone else.                              */\nconst FIELDS = ['rname','rrole','yname','school','deadline','submit',\n                's1','s2','s3','weak','why','note'];\nconst KEY = 'involve.brief.draft.v1';\nconst store = (() => {           // private mode and blocked-storage browsers throw\n  try { const k = '__t'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; }\n  catch (err) { return null; }\n})();\n\n/* ---- when the browser refuses to let us save --------------------------\n   This is not an edge case for this tool. The live surface is a WordPress page\n   at involve-consulting.com/tools/ that embeds this app in a CROSS-SITE\n   iframe. Storage in a cross-site frame is denied outright under Safari's ITP\n   and partitioned or blocked under Firefox TCP and Chrome's storage\n   partitioning, so for a large share of the people who reach this tool through\n   the site, `store` is null. Every code path then no-opped in silence while\n   two sentences on the page went on promising that nothing would be lost, and\n   a route change lost fifteen minutes of work without a word. If we cannot\n   keep the draft, we say so, in both places that claim we can.            */\nlet storageWorks = !!store;\nfunction tellTheTruthAboutStorage() {\n  if (storageWorks) return;\n  const claim = document.getElementById('saveClaim');\n  if (claim) claim.textContent = 'Runs on your device. Nothing you type is sent unless you use the ' +\n    'email form at the bottom. This browser is not letting us save your answers. If you leave or ' +\n    'reload this page, they are lost.';\n  const hint = document.getElementById('saveHint');\n  if (hint && hint.className !== 'flag') {\n    hint.className = 'flag';\n    hint.innerHTML = '<p><strong>Your answers are not being saved.</strong> This browser is ' +\n      'blocking saving here. This often happens in a private window. The form still works, but if ' +\n      'you leave or reload, your answers are gone. Build the brief and copy or download it before ' +\n      'you leave.</p>';\n  }\n  const reset = document.getElementById('reset');\n  if (reset) reset.textContent = 'Start again';\n}\n\nfunction saveDraft() {\n  if (!store) return;\n  const d = { traits: [...picked] };\n  FIELDS.forEach(id => { d[id] = document.getElementById(id).value; });\n  /* A write that fails is the same fact as a storage object we never got: the\n     draft is not being kept. Quota exhaustion used to be swallowed here while\n     the copy kept its promise. */\n  try { store.setItem(KEY, JSON.stringify(d)); }\n  catch (err) { storageWorks = false; tellTheTruthAboutStorage(); }\n}\nfunction restoreDraft() {\n  if (!store) return false;\n  let d;\n  try { d = JSON.parse(store.getItem(KEY) || 'null'); } catch (err) { return false; }\n  if (!d) return false;\n  let any = false;\n  FIELDS.forEach(id => {\n    if (typeof d[id] === 'string' && d[id] !== '') { document.getElementById(id).value = d[id]; any = true; }\n  });\n  (d.traits || []).forEach(t => {\n    const b = [...wrap.children].find(x => x.textContent === t);\n    if (b) { b.setAttribute('aria-pressed', 'true'); picked.add(t); any = true; }\n  });\n  return any;\n}\nfunction clearDraft() { if (store) { try { store.removeItem(KEY); } catch (err) {} } }\n\nFIELDS.forEach(id => document.getElementById(id).addEventListener('input', () => {\n  saveDraft();\n  if (!document.getElementById('out').hidden) {\n    const m = document.getElementById('copyMsg');\n    m.textContent = 'You changed your answers. Press \"Build the brief\" again to update it before you copy or send it.';\n    m.hidden = false;\n  }\n}));\n\ntellTheTruthAboutStorage();\n\nconst restored = restoreDraft();\nif (restored) {\n  const n = document.createElement('p');\n  n.className = 'hint';\n  n.setAttribute('role', 'status');\n  n.textContent = 'We brought back the answers you typed here last time. They are saved only in this ' +\n    'browser. Use \"Start again\" below to clear them.';\n  document.querySelector('.tool-head').appendChild(n);\n}\n\n/* ---- how much did the user actually give us? ------------------------------\n   A blank form used to produce a 645-character finished-looking document with\n   three bracketed placeholders in it, and then offer to copy, download and\n   email it. Bracketed placeholders are not a warning - they read as deliberate. */\n/* The four fields whose absence leaves a BRACKETED PLACEHOLDER in the finished\n   document, and what the document would say instead of each. A brief that\n   opens \"Hi [their name]\" and says \"I am applying to [school and programme]\"\n   is the form letter this tool exists to prevent, and it must not be\n   copyable, downloadable or emailable however much else is filled in.       */\nconst NAMED_FIELDS = [\n  ['rname',  'their name',                          '[their name]'],\n  ['yname',  'your name',                           '[your name]'],\n  ['school', 'the school and programme',            '[school and programme]'],\n  ['rrole',  'their role, and how they know you',   '[how they know you]']\n];\n\nconst andList = a => a.length < 2 ? (a[0] || '')\n  : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];\n\nfunction substance() {\n  const missing = NAMED_FIELDS.filter(f => !v(f[0]));\n  const said    = ['s1','s2','s3','weak','why','note'].filter(id => v(id)).length;\n  return { named: NAMED_FIELDS.length - missing.length, missing: missing,\n           said: said, traits: picked.size };\n}\n\ndocument.getElementById('build').addEventListener('click', () => {\n  const you = v('yname') || '[your name]';\n  const them = v('rname') || '[their name]';\n  const school = v('school') || '[school and programme]';\n  const stories = [v('s1'), v('s2'), v('s3')].filter(Boolean);\n\n  /* Boilerplate is written as one unbroken line per paragraph. It used to carry\n     newlines every ~85 characters, put there to keep this source under 100\n     columns, while the user's own answers went in unwrapped - so a pasted brief\n     had ragged short canned lines above full-width personal ones and read as a\n     formatting accident. Let the mail client wrap all of it the same way. */\n  let t = `Hi ${them},\\n\\n`;\n  t += `Thank you again for agreeing to write this. I have put everything in one place so it takes you as little time as possible.\\n\\n`;\n  t += `THE APPLICATION\\nI am applying to ${school}.`;\n  if (v('deadline')) t += ` Your letter is due ${v('deadline')}.`;\n  if (v('submit')) t += ` You will receive ${v('submit')}.`;\n  t += `\\n\\n`;\n  /* The placeholder asks for \"my reporting manager for the last three years\", so\n     the user types a lowercase fragment and it used to be printed as a bare\n     paragraph under a shouted heading. Make it a sentence here instead. */\n  t += `HOW YOU KNOW ME\\n${v('rrole') ? `You have been ${v('rrole').replace(/[.\\s]+$/, '')}.` : '[how they know you]'}\\n\\n`;\n\n  if (v('why')) t += `WHY I AM DOING THIS\\n${v('why')}\\n\\n`;\n\n  if (picked.size) {\n    t += `WHAT THE SCHOOL ASKS YOU TO COMMENT ON\\n`;\n    t += [...picked].map(x => `\u2014 ${x}`).join('\\n');\n    t += `\\n\\n`;\n  }\n\n  if (stories.length) {\n    t += `WORK OF MINE YOU SAW, IN CASE IT IS USEFUL\\n`;\n    t += `These are only prompts. Please use whichever fit what you actually observed, and ignore the rest \u2014 the letter should be yours.\\n\\n`;\n    stories.forEach((s, i) => { t += `${i + 1}. ${s}\\n\\n`; });\n  }\n\n  if (v('weak')) {\n    t += `ON THE DEVELOPMENT AREA\\n`;\n    t += `The form will ask you where I need to grow. Schools distrust a letter that says nothing. If it is consistent with what you saw, this is what I have been working on:\\n`;\n    t += `${v('weak')}\\n\\n`;\n  }\n\n  t += `WHAT TENDS TO MAKE THESE LETTERS LAND\\n`;\n  t += `Admissions readers get through hundreds of these. A short specific anecdote with a result in it carries more weight than a paragraph of adjectives. If you can name a number, a client or a moment, that is the part they remember.\\n\\n`;\n\n  if (v('note')) t += `ONE MORE THING\\n${v('note')}\\n\\n`;\n\n  t += `If anything here is not how you remember it, please go with your version. Happy to talk it through if that is easier.\\n\\n`;\n  t += `Thank you,\\n${you}`;\n\n  const sub = substance();\n  const thin = document.getElementById('thin');\n  const shut = on => {\n    ['copy','dl'].forEach(id => { document.getElementById(id).disabled = on; });\n    document.getElementById('briefGatePanel').hidden = on;\n  };\n  if (sub.named === 0 && sub.said === 0 && sub.traits === 0) {\n    /* Nothing was entered at all. Do not hand back a document. */\n    thin.className = 'flag';\n    thin.innerHTML = '<p><strong>Nothing is filled in yet.</strong> Below is only an empty template. ' +\n      'Add the names and at least one example of work they saw you do, then press Build again. ' +\n      'Copy, download and email stay off until then.</p>';\n    thin.hidden = false;\n    shut(true);\n  } else if (sub.missing.length) {\n    /* Something was entered \u2014 one trait chip is enough \u2014 but the document\n       still addresses nobody, from nobody, about nothing. The old guard asked\n       only \"did the user touch ANY of the three groups\", so a single click on\n       \"Leadership\" switched on Copy, Download and the email gate for a brief\n       reading \"Hi [their name] \u2026 I am applying to [school and programme]\",\n       under a banner asserting the names were filled in. They were not. */\n    const one = sub.missing.length === 1;\n    thin.className = 'flag';\n    thin.innerHTML = '<p><strong>This is still a template.</strong> ' +\n      andList(sub.missing.map(f => f[1])).replace(/^./, c => c.toUpperCase()) + ' ' +\n      (one ? 'is' : 'are') + ' blank, so the brief below still shows ' +\n      andList(sub.missing.map(f => '\u201c' + f[2] + '\u201d')) + ' instead of real details. Fill ' +\n      (one ? 'it' : 'them') + ' in and press Build again. Copy, download and email stay off ' +\n      'until then.</p>';\n    thin.hidden = false;\n    shut(true);\n  } else if (sub.said === 0) {\n    thin.className = 'flag';\n    thin.innerHTML = '<p><strong>This brief has no examples yet.</strong> The names are filled in, but ' +\n      'there are no examples of your work, so your recommender learns nothing new. You can send it, but ' +\n      'it is much better with two or three examples.</p>';\n    thin.hidden = false;\n    shut(false);\n  } else {\n    thin.hidden = true;\n    thin.innerHTML = '';\n    ['copy','dl'].forEach(id => { document.getElementById(id).disabled = false; });\n    document.getElementById('briefGatePanel').hidden = false;\n  }\n\n  document.getElementById('brief').textContent = t;\n  document.getElementById('out').hidden = false;\n  document.getElementById('out').scrollIntoView({ behavior: 'smooth', block: 'start' });\n  saveDraft();\n  if (window.involveTrack) window.involveTrack('tool_complete',\n    { tool: 'recommender-brief', examples: sub.said, complete: sub.said > 0 });\n});\n\ndocument.getElementById('reset').addEventListener('click', () => {\n  clearDraft();\n  FIELDS.forEach(id => { document.getElementById(id).value = ''; });\n  [...wrap.children].forEach(b => b.setAttribute('aria-pressed', 'false'));\n  picked.clear();\n  document.getElementById('brief').textContent = '';\n  document.getElementById('out').hidden = true;\n  document.getElementById('rname').focus();\n});\n\n// The clipboard write is refused on non-secure origins, in Safari when the write is not in the\n// direct gesture task, and whenever the document is not focused. Never let it fail silently.\nfunction legacyCopy(text) {\n  const ta = document.createElement('textarea');\n  ta.value = text;\n  ta.setAttribute('readonly', '');\n  ta.style.position = 'fixed';\n  ta.style.top = '-1000px';\n  ta.style.opacity = '0';\n  document.body.appendChild(ta);\n  let ok = false;\n  try {\n    ta.select();\n    ta.setSelectionRange(0, ta.value.length);\n    ok = document.execCommand('copy');\n  } catch (err) {\n    ok = false;\n  }\n  document.body.removeChild(ta);\n  return ok;\n}\n\ndocument.getElementById('copy').addEventListener('click', async (e) => {\n  const btn = e.currentTarget;\n  const msg = document.getElementById('copyMsg');\n  const text = document.getElementById('brief').textContent;\n  let copied = false;\n  try {\n    if (navigator.clipboard && navigator.clipboard.writeText) {\n      await navigator.clipboard.writeText(text);\n      copied = true;\n    }\n  } catch (err) {\n    copied = false;\n  }\n  if (!copied) copied = legacyCopy(text);\n  if (copied) {\n    msg.hidden = true;\n    msg.textContent = '';\n    btn.textContent = 'Copied';\n    setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 1800);\n  } else {\n    btn.textContent = 'Copy to clipboard';\n    msg.textContent = 'Your browser blocked the copy. Select the text above and copy it, or use ' +\n      'Download as a text file.';\n    msg.hidden = false;\n  }\n});\n\ndocument.getElementById('dl').addEventListener('click', () => {\n  const blob = new Blob([document.getElementById('brief').textContent], { type: 'text/plain' });\n  const a = document.createElement('a');\n  a.href = URL.createObjectURL(blob);\n  a.download = 'recommender-brief.txt';\n  document.body.appendChild(a);\n  a.click();\n  a.remove();\n  setTimeout(() => URL.revokeObjectURL(a.href), 30000);\n});\n\nif(window.involveGate) window.involveGate(document.getElementById('gateBrief'),{\n  tool:'recommender-brief', cta:'Email me the brief',\n  payload:()=>({ school:document.getElementById('school').value||null,\n                 brief:document.getElementById('brief').textContent })\n});\n"}};
+var VIEWS = {"brief": {"title": "Recommender brief builder", "html": "<div data-view=\"brief\"><div class=\"toolbar-strip\">\n  <div class=\"wrap\">\n    <span class=\"stamp is-ready\">Live</span>\n    <span id=\"saveClaim\">Runs on your device. Nothing you type is sent unless you use the email form at the bottom. Your answers are saved in this browser as you type.</span>\n  </div></div><main class=\"wrap\">\n\n  <div class=\"tool-head\">\n    <h1>Recommender brief builder</h1>\n    <p class=\"lede\">Your recommender is busy. Without facts from you, their letter will be vague.\n    This tool makes a short note with your key facts. Send it to them before they write.</p>\n  </div>\n\n  <div class=\"flag\" style=\"margin-bottom:22px\">\n    <p><strong>Do not write the letter yourself.</strong> Writing your own letter and asking someone\n    to sign it is cheating, and schools check. This note gives your recommender facts. They write the\n    letter in their own words.</p>\n  </div>\n\n  <div class=\"panel\">\n    <h2>Who is writing it</h2>\n    <div class=\"field-row\">\n      <div class=\"field\"><label for=\"rname\">Their name</label><input type=\"text\" id=\"rname\" placeholder=\"e.g. Priya Menon\"></div>\n      <div class=\"field\"><label for=\"rrole\">Their role, and how they know you</label><input type=\"text\" id=\"rrole\" placeholder=\"e.g. my reporting manager for the last three years\"></div>\n    </div>\n    <div class=\"field-row\">\n      <div class=\"field\"><label for=\"yname\">Your name</label><input type=\"text\" id=\"yname\"></div>\n      <div class=\"field\"><label for=\"school\">School and programme</label><input type=\"text\" id=\"school\" placeholder=\"e.g. INSEAD MBA, January intake\"></div>\n    </div>\n    <div class=\"field-row\">\n      <div class=\"field\"><label for=\"deadline\">Their deadline</label><input type=\"text\" id=\"deadline\" placeholder=\"e.g. 14 October\"></div>\n      <div class=\"field\"><label for=\"submit\">How they submit</label><input type=\"text\" id=\"submit\" placeholder=\"e.g. an emailed portal link from the school\"></div>\n    </div>\n  </div>\n\n  <div class=\"panel\">\n    <h2>What the school wants them to comment on</h2>\n    <p class=\"hint\" style=\"margin-top:-6px\">Look at the school's form for recommenders. Pick only the\n    qualities it names.</p>\n    <div class=\"chips\" id=\"traits\"></div>\n  </div>\n\n  <div class=\"panel\">\n    <h2>Examples of your work</h2>\n    <p class=\"hint\" style=\"margin-top:-6px\">Two or three things they saw you do, and what happened.\n    Be specific. \"Handled a difficult client\" is too vague. \"Kept the Reliance account after we missed\n    two deliveries, and it renewed at a higher value\" is useful.</p>\n    <div class=\"field\"><label for=\"s1\">First example</label><textarea id=\"s1\" rows=\"3\" placeholder=\"What happened, what you did, and the result.\"></textarea></div>\n    <div class=\"field\"><label for=\"s2\">Second example</label><textarea id=\"s2\" rows=\"3\"></textarea></div>\n    <div class=\"field\"><label for=\"s3\">Third example, if you have one</label><textarea id=\"s3\" rows=\"3\"></textarea></div>\n  </div>\n\n  <div class=\"panel\">\n    <h2>A few more questions</h2>\n    <div class=\"field\">\n      <label for=\"weak\">Most schools ask about something you need to improve. What would you like them to say?</label>\n      <textarea id=\"weak\" rows=\"2\" placeholder=\"Pick something real that you have worked on. A letter that says you have no weaknesses sounds like the writer does not know you well.\"></textarea>\n    </div>\n    <div class=\"field\">\n      <label for=\"why\">Why you want this degree, in one or two lines</label>\n      <textarea id=\"why\" rows=\"2\" placeholder=\"So their letter matches your essays.\"></textarea>\n    </div>\n    <div class=\"field\">\n      <label for=\"note\">Anything else they should know</label>\n      <textarea id=\"note\" rows=\"2\" placeholder=\"e.g. the school likes real stories more than praise words, or there is a gap in my CV to explain.\"></textarea>\n    </div>\n    <div class=\"btn-row\">\n      <button class=\"btn\" id=\"build\">Build the brief</button>\n      <button class=\"btn ghost\" id=\"reset\">Start again (clears your answers)</button>\n    </div>\n    <p class=\"hint\" id=\"saveHint\">Your answers are saved in this browser as you type, so you can leave\n    and come back. Saving sends nothing. \"Start again\" deletes them.</p>\n  </div>\n\n  <div id=\"out\" hidden>\n    <div class=\"panel\">\n      <h2>Your brief</h2>\n      <div id=\"thin\" hidden></div>\n      <p class=\"hint\" style=\"margin-top:-6px\">Read it once as if you were them. Then send it.</p>\n      <div class=\"readout\" id=\"brief\" style=\"background:var(--paper-sunk);padding:22px;border-radius:4px;border:1px solid var(--rule)\"></div>\n      <div class=\"btn-row\">\n        <button class=\"btn\" id=\"copy\">Copy to clipboard</button>\n        <button class=\"btn ghost\" id=\"dl\">Download as a text file</button>\n      </div>\n      <p class=\"hint\" id=\"copyMsg\" role=\"status\" aria-live=\"polite\" hidden></p>\n    </div>\n    <div class=\"panel\" id=\"briefGatePanel\">\n      <h2>Get this by email</h2>\n      <p>We will email you this brief, so it is in your inbox when you write to your recommender.\n      Copy and download above are always free.</p>\n      <div id=\"gateBrief\"></div>\n    </div>\n\n    <div class=\"panel\">\n      <h2>Before you send it</h2>\n      <p>Ask them in person or on a call first. Ask if they can write you a <em>strong</em> letter. If\n      they hesitate, take that as a sign. A detailed letter from your direct manager is better than a\n      lukewarm one from a senior boss.</p>\n      <a class=\"btn\" href=\"https://involve-consulting.com/contact-us/?utm_source=tools&amp;utm_medium=brief&amp;utm_campaign=choosing-recommenders\">Get help choosing recommenders</a>\n    </div>\n  </div>\n\n</main></div>", "js": "\nconst TRAITS = ['Leadership','Teamwork','Impact and results','Self-awareness','Handling feedback',\n  'Integrity','Communication','Analytical ability','Initiative','Working across cultures',\n  'Managing conflict','Growth over time'];\n\nconst picked = new Set();\nconst wrap = document.getElementById('traits');\nTRAITS.forEach(t => {\n  const b = document.createElement('button');\n  b.type = 'button'; b.className = 'chip'; b.textContent = t; b.setAttribute('aria-pressed', 'false');\n  b.addEventListener('click', () => {\n    const on = b.getAttribute('aria-pressed') === 'true';\n    b.setAttribute('aria-pressed', String(!on));\n    on ? picked.delete(t) : picked.add(t);\n    /* Selecting AND deselecting are both edits to the draft. Saving only on\n       `input` over the text fields lost every trait on a route change, and -\n       worse - a deselect after a text edit left the old selection in storage,\n       so traits the user had deliberately removed came back pressed and got\n       sent to the recommender. */\n    saveDraft();\n  });\n  wrap.appendChild(b);\n});\n\nconst v = id => document.getElementById(id).value.trim();\n\n/* ---- the draft, kept ------------------------------------------------------\n   This form is fifteen to thirty minutes of real work: three STAR examples, a\n   genuine weakness, a why-MBA. Every route change used to wipe it silently,\n   and the masthead sitting directly above the form has five links that do\n   exactly that. The draft now lives in localStorage, keyed per field, and is\n   restored on mount. It never leaves the browser - localStorage is per-origin\n   and is not readable by us or by anyone else.                              */\nconst FIELDS = ['rname','rrole','yname','school','deadline','submit',\n                's1','s2','s3','weak','why','note'];\nconst KEY = 'involve.brief.draft.v1';\nconst store = (() => {           // private mode and blocked-storage browsers throw\n  try { const k = '__t'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; }\n  catch (err) { return null; }\n})();\n\n/* ---- when the browser refuses to let us save --------------------------\n   This is not an edge case for this tool. The live surface is a WordPress page\n   at involve-consulting.com/tools/ that embeds this app in a CROSS-SITE\n   iframe. Storage in a cross-site frame is denied outright under Safari's ITP\n   and partitioned or blocked under Firefox TCP and Chrome's storage\n   partitioning, so for a large share of the people who reach this tool through\n   the site, `store` is null. Every code path then no-opped in silence while\n   two sentences on the page went on promising that nothing would be lost, and\n   a route change lost fifteen minutes of work without a word. If we cannot\n   keep the draft, we say so, in both places that claim we can.            */\nlet storageWorks = !!store;\nfunction tellTheTruthAboutStorage() {\n  if (storageWorks) return;\n  const claim = document.getElementById('saveClaim');\n  if (claim) claim.textContent = 'Runs on your device. Nothing you type is sent unless you use the ' +\n    'email form at the bottom. This browser is not letting us save your answers. If you leave or ' +\n    'reload this page, they are lost.';\n  const hint = document.getElementById('saveHint');\n  if (hint && hint.className !== 'flag') {\n    hint.className = 'flag';\n    hint.innerHTML = '<p><strong>Your answers are not being saved.</strong> This browser is ' +\n      'blocking saving here. This often happens in a private window. The form still works, but if ' +\n      'you leave or reload, your answers are gone. Build the brief and copy or download it before ' +\n      'you leave.</p>';\n  }\n  const reset = document.getElementById('reset');\n  if (reset) reset.textContent = 'Start again';\n}\n\nfunction saveDraft() {\n  if (!store) return;\n  const d = { traits: [...picked] };\n  FIELDS.forEach(id => { d[id] = document.getElementById(id).value; });\n  /* A write that fails is the same fact as a storage object we never got: the\n     draft is not being kept. Quota exhaustion used to be swallowed here while\n     the copy kept its promise. */\n  try { store.setItem(KEY, JSON.stringify(d)); }\n  catch (err) { storageWorks = false; tellTheTruthAboutStorage(); }\n}\nfunction restoreDraft() {\n  if (!store) return false;\n  let d;\n  try { d = JSON.parse(store.getItem(KEY) || 'null'); } catch (err) { return false; }\n  if (!d) return false;\n  let any = false;\n  FIELDS.forEach(id => {\n    if (typeof d[id] === 'string' && d[id] !== '') { document.getElementById(id).value = d[id]; any = true; }\n  });\n  (d.traits || []).forEach(t => {\n    const b = [...wrap.children].find(x => x.textContent === t);\n    if (b) { b.setAttribute('aria-pressed', 'true'); picked.add(t); any = true; }\n  });\n  return any;\n}\nfunction clearDraft() { if (store) { try { store.removeItem(KEY); } catch (err) {} } }\n\nFIELDS.forEach(id => document.getElementById(id).addEventListener('input', () => {\n  saveDraft();\n  if (!document.getElementById('out').hidden) {\n    const m = document.getElementById('copyMsg');\n    m.textContent = 'You changed your answers. Press \"Build the brief\" again to update it before you copy or send it.';\n    m.hidden = false;\n  }\n}));\n\ntellTheTruthAboutStorage();\n\nconst restored = restoreDraft();\nif (restored) {\n  const n = document.createElement('p');\n  n.className = 'hint';\n  n.setAttribute('role', 'status');\n  n.textContent = 'We brought back the answers you typed here last time. They are saved only in this ' +\n    'browser. Use \"Start again\" below to clear them.';\n  document.querySelector('.tool-head').appendChild(n);\n}\n\n/* ---- how much did the user actually give us? ------------------------------\n   A blank form used to produce a 645-character finished-looking document with\n   three bracketed placeholders in it, and then offer to copy, download and\n   email it. Bracketed placeholders are not a warning - they read as deliberate. */\n/* The four fields whose absence leaves a BRACKETED PLACEHOLDER in the finished\n   document, and what the document would say instead of each. A brief that\n   opens \"Hi [their name]\" and says \"I am applying to [school and programme]\"\n   is the form letter this tool exists to prevent, and it must not be\n   copyable, downloadable or emailable however much else is filled in.       */\nconst NAMED_FIELDS = [\n  ['rname',  'their name',                          '[their name]'],\n  ['yname',  'your name',                           '[your name]'],\n  ['school', 'the school and programme',            '[school and programme]'],\n  ['rrole',  'their role, and how they know you',   '[how they know you]']\n];\n\nconst andList = a => a.length < 2 ? (a[0] || '')\n  : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];\n\nfunction substance() {\n  const missing = NAMED_FIELDS.filter(f => !v(f[0]));\n  const said    = ['s1','s2','s3','weak','why','note'].filter(id => v(id)).length;\n  return { named: NAMED_FIELDS.length - missing.length, missing: missing,\n           said: said, traits: picked.size };\n}\n\ndocument.getElementById('build').addEventListener('click', () => {\n  const you = v('yname') || '[your name]';\n  const them = v('rname') || '[their name]';\n  const school = v('school') || '[school and programme]';\n  const stories = [v('s1'), v('s2'), v('s3')].filter(Boolean);\n\n  /* Boilerplate is written as one unbroken line per paragraph. It used to carry\n     newlines every ~85 characters, put there to keep this source under 100\n     columns, while the user's own answers went in unwrapped - so a pasted brief\n     had ragged short canned lines above full-width personal ones and read as a\n     formatting accident. Let the mail client wrap all of it the same way. */\n  let t = `Hi ${them},\\n\\n`;\n  t += `Thank you again for agreeing to write this. I have put everything in one place so it takes you as little time as possible.\\n\\n`;\n  t += `THE APPLICATION\\nI am applying to ${school}.`;\n  if (v('deadline')) t += ` Your letter is due ${v('deadline')}.`;\n  if (v('submit')) t += ` You will receive ${v('submit')}.`;\n  t += `\\n\\n`;\n  /* The placeholder asks for \"my reporting manager for the last three years\", so\n     the user types a lowercase fragment and it used to be printed as a bare\n     paragraph under a shouted heading. Make it a sentence here instead. */\n  t += `HOW YOU KNOW ME\\n${v('rrole') ? `You have been ${v('rrole').replace(/[.\\s]+$/, '')}.` : '[how they know you]'}\\n\\n`;\n\n  if (v('why')) t += `WHY I AM DOING THIS\\n${v('why')}\\n\\n`;\n\n  if (picked.size) {\n    t += `WHAT THE SCHOOL ASKS YOU TO COMMENT ON\\n`;\n    t += [...picked].map(x => `\u2014 ${x}`).join('\\n');\n    t += `\\n\\n`;\n  }\n\n  if (stories.length) {\n    t += `WORK OF MINE YOU SAW, IN CASE IT IS USEFUL\\n`;\n    t += `These are only prompts. Please use whichever fit what you actually observed, and ignore the rest \u2014 the letter should be yours.\\n\\n`;\n    stories.forEach((s, i) => { t += `${i + 1}. ${s}\\n\\n`; });\n  }\n\n  if (v('weak')) {\n    t += `ON THE DEVELOPMENT AREA\\n`;\n    t += `The form will ask you where I need to grow. Schools distrust a letter that says nothing. If it is consistent with what you saw, this is what I have been working on:\\n`;\n    t += `${v('weak')}\\n\\n`;\n  }\n\n  t += `WHAT TENDS TO MAKE THESE LETTERS LAND\\n`;\n  t += `Admissions readers get through hundreds of these. A short specific anecdote with a result in it carries more weight than a paragraph of adjectives. If you can name a number, a client or a moment, that is the part they remember.\\n\\n`;\n\n  if (v('note')) t += `ONE MORE THING\\n${v('note')}\\n\\n`;\n\n  t += `If anything here is not how you remember it, please go with your version. Happy to talk it through if that is easier.\\n\\n`;\n  t += `Thank you,\\n${you}`;\n\n  const sub = substance();\n  const thin = document.getElementById('thin');\n  const shut = on => {\n    ['copy','dl'].forEach(id => { document.getElementById(id).disabled = on; });\n    document.getElementById('briefGatePanel').hidden = on;\n  };\n  if (sub.named === 0 && sub.said === 0 && sub.traits === 0) {\n    /* Nothing was entered at all. Do not hand back a document. */\n    thin.className = 'flag';\n    thin.innerHTML = '<p><strong>Nothing is filled in yet.</strong> Below is only an empty template. ' +\n      'Add the names and at least one example of work they saw you do, then press Build again. ' +\n      'Copy, download and email stay off until then.</p>';\n    thin.hidden = false;\n    shut(true);\n  } else if (sub.missing.length) {\n    /* Something was entered \u2014 one trait chip is enough \u2014 but the document\n       still addresses nobody, from nobody, about nothing. The old guard asked\n       only \"did the user touch ANY of the three groups\", so a single click on\n       \"Leadership\" switched on Copy, Download and the email gate for a brief\n       reading \"Hi [their name] \u2026 I am applying to [school and programme]\",\n       under a banner asserting the names were filled in. They were not. */\n    const one = sub.missing.length === 1;\n    thin.className = 'flag';\n    thin.innerHTML = '<p><strong>This is still a template.</strong> ' +\n      andList(sub.missing.map(f => f[1])).replace(/^./, c => c.toUpperCase()) + ' ' +\n      (one ? 'is' : 'are') + ' blank, so the brief below still shows ' +\n      andList(sub.missing.map(f => '\u201c' + f[2] + '\u201d')) + ' instead of real details. Fill ' +\n      (one ? 'it' : 'them') + ' in and press Build again. Copy, download and email stay off ' +\n      'until then.</p>';\n    thin.hidden = false;\n    shut(true);\n  } else if (sub.said === 0) {\n    thin.className = 'flag';\n    thin.innerHTML = '<p><strong>This brief has no examples yet.</strong> The names are filled in, but ' +\n      'there are no examples of your work, so your recommender learns nothing new. You can send it, but ' +\n      'it is much better with two or three examples.</p>';\n    thin.hidden = false;\n    shut(false);\n  } else {\n    thin.hidden = true;\n    thin.innerHTML = '';\n    ['copy','dl'].forEach(id => { document.getElementById(id).disabled = false; });\n    document.getElementById('briefGatePanel').hidden = false;\n  }\n\n  document.getElementById('brief').textContent = t;\n  document.getElementById('out').hidden = false;\n  document.getElementById('out').scrollIntoView({ behavior: 'smooth', block: 'start' });\n  saveDraft();\n  if (window.involveTrack) window.involveTrack('tool_complete',\n    { tool: 'recommender-brief', examples: sub.said, complete: sub.said > 0 });\n});\n\ndocument.getElementById('reset').addEventListener('click', () => {\n  clearDraft();\n  FIELDS.forEach(id => { document.getElementById(id).value = ''; });\n  [...wrap.children].forEach(b => b.setAttribute('aria-pressed', 'false'));\n  picked.clear();\n  document.getElementById('brief').textContent = '';\n  document.getElementById('out').hidden = true;\n  document.getElementById('rname').focus();\n});\n\n// The clipboard write is refused on non-secure origins, in Safari when the write is not in the\n// direct gesture task, and whenever the document is not focused. Never let it fail silently.\nfunction legacyCopy(text) {\n  const ta = document.createElement('textarea');\n  ta.value = text;\n  ta.setAttribute('readonly', '');\n  ta.style.position = 'fixed';\n  ta.style.top = '-1000px';\n  ta.style.opacity = '0';\n  document.body.appendChild(ta);\n  let ok = false;\n  try {\n    ta.select();\n    ta.setSelectionRange(0, ta.value.length);\n    ok = document.execCommand('copy');\n  } catch (err) {\n    ok = false;\n  }\n  document.body.removeChild(ta);\n  return ok;\n}\n\ndocument.getElementById('copy').addEventListener('click', async (e) => {\n  const btn = e.currentTarget;\n  const msg = document.getElementById('copyMsg');\n  const text = document.getElementById('brief').textContent;\n  let copied = false;\n  try {\n    if (navigator.clipboard && navigator.clipboard.writeText) {\n      await navigator.clipboard.writeText(text);\n      copied = true;\n    }\n  } catch (err) {\n    copied = false;\n  }\n  if (!copied) copied = legacyCopy(text);\n  if (copied) {\n    msg.hidden = true;\n    msg.textContent = '';\n    btn.textContent = 'Copied';\n    setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 1800);\n  } else {\n    btn.textContent = 'Copy to clipboard';\n    msg.textContent = 'Your browser blocked the copy. Select the text above and copy it, or use ' +\n      'Download as a text file.';\n    msg.hidden = false;\n  }\n});\n\ndocument.getElementById('dl').addEventListener('click', () => {\n  const blob = new Blob([document.getElementById('brief').textContent], { type: 'text/plain' });\n  const a = document.createElement('a');\n  a.href = URL.createObjectURL(blob);\n  a.download = 'recommender-brief.txt';\n  document.body.appendChild(a);\n  a.click();\n  a.remove();\n  setTimeout(() => URL.revokeObjectURL(a.href), 30000);\n});\n\nif(window.involveGate) window.involveGate(document.getElementById('gateBrief'),{\n  tool:'recommender-brief', cta:'Email me this brief',\n  summary:()=>{ const sc=document.getElementById('school').value;\n    return { result:'Your recommender brief'+(sc?' for '+sc:'') }; },\n  payload:()=>({ school:document.getElementById('school').value||null,\n                 brief:document.getElementById('brief').textContent })\n});\n"}};
 /* Which view a bare URL, an unknown route or a stray in-page anchor lands on.
    'home' in the combined bundle. In a single-tool page there IS no home view,
    so the fallback is that tool: the page must never route to a view it does
